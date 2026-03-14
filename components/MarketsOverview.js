@@ -22,15 +22,16 @@ const CRYPTO_META = {
   hyperliquid: { name: 'Hyperliquid', symbol: 'HYPE' },
 }
 
-const YAHOO_META = {
-  'SPY':      { name: 'S&P 500',   symbol: 'SPY',       group: 'stocks' },
-  'QQQ':      { name: 'Nasdaq',    symbol: 'QQQ',       group: 'stocks' },
-  'AUDUSD=X': { name: 'AUD/USD',   symbol: 'AUD/USD',   group: 'forex' },
-  'AUDJPY=X': { name: 'AUD/JPY',   symbol: 'AUD/JPY',   group: 'forex' },
-  'EURJPY=X': { name: 'EUR/JPY',   symbol: 'EUR/JPY',   group: 'forex' },
-  'GC=F':     { name: 'Gold',      symbol: 'XAU/USD',   group: 'commodities' },
-  'CL=F':     { name: 'Crude Oil', symbol: 'WTI',       group: 'commodities' },
-  'HG=F':     { name: 'Copper',    symbol: 'COPPER',    group: 'commodities' },
+// Keys now match Twelve Data symbol format (no Yahoo =X / =F suffixes)
+const MARKETS_META = {
+  'SPY':     { name: 'S&P 500',   symbol: 'SPY',     group: 'stocks' },
+  'QQQ':     { name: 'Nasdaq',    symbol: 'QQQ',     group: 'stocks' },
+  'AUD/USD': { name: 'AUD/USD',   symbol: 'AUD/USD', group: 'forex' },
+  'AUD/JPY': { name: 'AUD/JPY',   symbol: 'AUD/JPY', group: 'forex' },
+  'EUR/JPY': { name: 'EUR/JPY',   symbol: 'EUR/JPY', group: 'forex' },
+  'XAU/USD': { name: 'Gold',      symbol: 'XAU/USD', group: 'commodities' },
+  'WTI':     { name: 'Crude Oil', symbol: 'WTI',     group: 'commodities' },
+  'COPPER':  { name: 'Copper',    symbol: 'COPPER',  group: 'commodities' },
 }
 
 export default function MarketsOverview() {
@@ -59,7 +60,7 @@ export default function MarketsOverview() {
       if (mktData.ok) {
         setMarkets(mktData.data)
         // AUD/USD rate for conversion
-        const audUsd = mktData.data['AUDUSD=X']?.price
+        const audUsd = mktData.data['AUD/USD']?.price
         if (audUsd) setAudRate(audUsd)
       }
 
@@ -89,9 +90,9 @@ export default function MarketsOverview() {
     }
   })
 
-  const stockCards      = Object.entries(YAHOO_META).filter(([,m]) => m.group === 'stocks').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
-  const forexCards      = Object.entries(YAHOO_META).filter(([,m]) => m.group === 'forex').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
-  const commodityCards  = Object.entries(YAHOO_META).filter(([,m]) => m.group === 'commodities').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
+  const stockCards      = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'stocks').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
+  const forexCards      = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'forex').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
+  const commodityCards  = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'commodities').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
 
   if (loading) {
     return (
@@ -153,7 +154,7 @@ export default function MarketsOverview() {
 
       <div className="text-[10px] text-[#333] tracking-widest pt-2">
         LAST UPDATE {lastUpdated?.toLocaleTimeString('en-US', { hour12: false })}
-        {' · '}CRYPTO VIA COINGECKO · MARKETS VIA YAHOO FINANCE · REFRESHES 60S
+        {' · '}CRYPTO VIA COINGECKO · MARKETS VIA TWELVE DATA · REFRESHES 60S
       </div>
     </div>
   )

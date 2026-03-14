@@ -20,13 +20,13 @@ const ASSET_MAP = [
   { key: 'SPY',         name: 'S&P 500',     symbol: 'SPY',      group: 'Equities' },
   { key: 'QQQ',         name: 'Nasdaq',      symbol: 'QQQ',      group: 'Equities' },
   // Forex
-  { key: 'AUDUSD=X',    name: 'AUD/USD',     symbol: 'AUD/USD',  group: 'Forex' },
-  { key: 'AUDJPY=X',    name: 'AUD/JPY',     symbol: 'AUD/JPY',  group: 'Forex' },
-  { key: 'EURJPY=X',    name: 'EUR/JPY',     symbol: 'EUR/JPY',  group: 'Forex' },
-  // Commodities
-  { key: 'GC=F',        name: 'Gold',        symbol: 'XAU/USD',  group: 'Commodities' },
-  { key: 'CL=F',        name: 'Crude Oil',   symbol: 'WTI',      group: 'Commodities' },
-  { key: 'HG=F',        name: 'Copper',      symbol: 'COPPER',   group: 'Commodities' },
+  { key: 'AUD/USD',     name: 'AUD/USD',     symbol: 'AUD/USD',  group: 'Forex' },
+  { key: 'AUD/JPY',     name: 'AUD/JPY',     symbol: 'AUD/JPY',  group: 'Forex' },
+  { key: 'EUR/JPY',     name: 'EUR/JPY',     symbol: 'EUR/JPY',  group: 'Forex' },
+  // Commodities — keys now Twelve Data format
+  { key: 'XAU/USD',     name: 'Gold',        symbol: 'XAU/USD',  group: 'Commodities' },
+  { key: 'WTI',         name: 'Crude Oil',   symbol: 'WTI',      group: 'Commodities' },
+  { key: 'COPPER',      name: 'Copper',      symbol: 'COPPER',   group: 'Commodities' },
 ]
 
 function DeltaCell({ value }) {

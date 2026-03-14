@@ -1,44 +1,54 @@
 export const revalidate = 0
 
-// Yahoo Finance unofficial quote endpoint — no key needed
-// Runs server-side so no CORS issues
-export async function GET() {
-  const symbols = [
-    // Stocks (ETFs as proxies)
-    'SPY',   // S&P 500
-    'QQQ',   // Nasdaq
-    // Forex
-    'AUDUSD=X',
-    'AUDJPY=X',
-    'EURJPY=X',
-    // Commodities
-    'GC=F',  // Gold futures
-    'CL=F',  // Crude Oil futures
-    'HG=F',  // Copper futures
-  ]
+// Twelve Data — stocks, forex, commodities
+// Free tier: 800 API credits/day. Batch call = 1 credit per symbol.
+// Set TWELVE_DATA_API_KEY in Vercel environment variables.
 
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,currency`
+const TD_KEY = process.env.TWELVE_DATA_API_KEY
+
+// Twelve Data symbol format (no Yahoo =X or =F suffixes needed)
+const TD_SYMBOLS = {
+  // Stocks
+  SPY:        { name: 'S&P 500',   currency: 'USD' },
+  QQQ:        { name: 'Nasdaq',    currency: 'USD' },
+  // Forex
+  'AUD/USD':  { name: 'AUD/USD',   currency: 'USD' },
+  'AUD/JPY':  { name: 'AUD/JPY',   currency: 'JPY' },
+  'EUR/JPY':  { name: 'EUR/JPY',   currency: 'JPY' },
+  // Commodities (Twelve Data uses XAU/USD, WTI, COPPER)
+  'XAU/USD':  { name: 'Gold',      currency: 'USD' },
+  'WTI':      { name: 'Crude Oil', currency: 'USD' },
+  'COPPER':   { name: 'Copper',    currency: 'USD' },
+}
+
+export async function GET() {
+  if (!TD_KEY) {
+    return Response.json({ ok: false, error: 'TWELVE_DATA_API_KEY not set' }, { status: 500 })
+  }
+
+  const symbolList = Object.keys(TD_SYMBOLS).join(',')
+  const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbolList)}&apikey=${TD_KEY}`
 
   try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Accept': 'application/json',
-      },
-      next: { revalidate: 0 },
-    })
+    const res = await fetch(url, { next: { revalidate: 0 } })
+    if (!res.ok) throw new Error(`Twelve Data status ${res.status}`)
 
-    if (!res.ok) throw new Error(`Yahoo status ${res.status}`)
+    const raw = await res.json()
 
-    const data = await res.json()
-    const quotes = data?.quoteResponse?.result ?? []
+    // When multiple symbols, response is keyed by symbol
+    // When single symbol, response is the object directly
+    const isMulti = !raw.symbol
 
     const mapped = {}
-    for (const q of quotes) {
-      mapped[q.symbol] = {
-        price: q.regularMarketPrice,
-        change24h: q.regularMarketChangePercent,
-        currency: q.currency ?? 'USD',
+    for (const [sym, meta] of Object.entries(TD_SYMBOLS)) {
+      const q = isMulti ? raw[sym] : raw
+      if (!q || q.status === 'error' || !q.close) continue
+
+      // Twelve Data quote: close = current price, percent_change = 1d % change
+      mapped[sym] = {
+        price:    parseFloat(q.close),
+        change24h: parseFloat(q.percent_change),
+        currency:  meta.currency,
       }
     }
 

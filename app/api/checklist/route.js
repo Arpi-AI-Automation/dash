@@ -1,7 +1,8 @@
 export const revalidate = 0
 
+// All Binance fapi calls replaced with Bybit V5 (no Vercel IP block)
+
 async function getBtcData() {
-  // CoinGecko: BTC price + 24h change
   const res = await fetch(
     'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true',
     { next: { revalidate: 0 } }
@@ -11,13 +12,14 @@ async function getBtcData() {
 }
 
 async function getFundingRate() {
-  // Binance: BTC funding rate
+  // Bybit: lastFundingRate is in the tickers endpoint
   const res = await fetch(
-    'https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT',
-    { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 0 } }
+    'https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT',
+    { next: { revalidate: 0 } }
   )
-  const d = await res.json()
-  return parseFloat(d.lastFundingRate)
+  const json = await res.json()
+  const t = json.result?.list?.[0]
+  return parseFloat(t.fundingRate)
 }
 
 async function getFearGreed() {
@@ -30,44 +32,49 @@ async function getFearGreed() {
 }
 
 async function getLongShort() {
+  // Bybit: account-ratio — buyRatio = longs, sellRatio = shorts
   const res = await fetch(
-    'https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=1h&limit=1',
-    { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 0 } }
+    'https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1h&limit=1',
+    { next: { revalidate: 0 } }
   )
-  const d = await res.json()
+  const json = await res.json()
+  const latest = json.result?.list?.[0]
   return {
-    longRatio:  parseFloat(d[0].longAccount) * 100,
-    shortRatio: parseFloat(d[0].shortAccount) * 100,
+    longRatio:  parseFloat(latest.buyRatio)  * 100,
+    shortRatio: parseFloat(latest.sellRatio) * 100,
   }
 }
 
 async function getOpenInterest() {
-  // Current OI in BTC units
-  const [oiRes, priceRes] = await Promise.all([
-    fetch('https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT',
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 0 } }),
-    fetch('https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT',
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 0 } }),
+  // Bybit open interest (single snapshot) + mark price from ticker
+  const [oiRes, tickerRes] = await Promise.all([
+    fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=1',
+      { next: { revalidate: 0 } }),
+    fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT',
+      { next: { revalidate: 0 } }),
   ])
-  const oi    = await oiRes.json()
-  const price = await priceRes.json()
-  const oiBtc = parseFloat(oi.openInterest)
-  const markPx = parseFloat(price.markPrice)
+  const oiJson     = await oiRes.json()
+  const tickerJson = await tickerRes.json()
+
+  const oiBtc  = parseFloat(oiJson.result?.list?.[0]?.openInterest ?? 0)
+  const markPx = parseFloat(tickerJson.result?.list?.[0]?.markPrice ?? 0)
   return oiBtc * markPx // USD notional
 }
 
 async function getOiHistory() {
-  // OI history to detect direction (rising vs falling)
-  // Use 2 data points: now and 4h ago
+  // Bybit: last 5 hourly OI snapshots to detect rising/falling
   const res = await fetch(
-    'https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=5',
-    { headers: { 'User-Agent': 'Mozilla/5.0' }, next: { revalidate: 0 } }
+    'https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=5',
+    { next: { revalidate: 0 } }
   )
-  const d = await res.json()
-  if (!d?.length || d.length < 2) return null
-  // d[0] is oldest, d[last] is newest
-  const oldest = parseFloat(d[0].sumOpenInterestValue)
-  const newest = parseFloat(d[d.length - 1].sumOpenInterestValue)
+  const json = await res.json()
+  const list = json.result?.list
+  if (!list || list.length < 2) return null
+
+  // Bybit returns newest-first — reverse to oldest-first
+  const sorted  = [...list].reverse()
+  const oldest  = parseFloat(sorted[0].openInterestValue)
+  const newest  = parseFloat(sorted[sorted.length - 1].openInterestValue)
   return { oldest, newest, rising: newest > oldest }
 }
 

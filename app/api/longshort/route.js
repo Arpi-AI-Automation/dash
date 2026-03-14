@@ -1,27 +1,28 @@
 export const revalidate = 0
 
-// Binance: GET /futures/data/globalLongShortAccountRatio
-// Requires symbol + period per call — no API key needed
-// We fetch all symbols in parallel
+// Bybit V5 long/short ratio — public endpoint, no API key, no Vercel IP block
+// GET /v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1h&limit=1
 
 const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'SUIUSDT', 'XRPUSDT', 'BNBUSDT', 'AAVEUSDT', 'DOGEUSDT']
 
 async function fetchRatio(symbol) {
-  // limit=1 gives us just the latest value
-  const url = `https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}&period=1h&limit=1`
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 0 },
-  })
+  const url = `https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=${symbol}&period=1h&limit=1`
+  const res = await fetch(url, { next: { revalidate: 0 } })
   if (!res.ok) throw new Error(`${symbol}: ${res.status}`)
-  const data = await res.json()
-  const latest = data[0]
+  const json = await res.json()
+  if (json.retCode !== 0) throw new Error(`${symbol}: ${json.retMsg}`)
+  const latest = json.result?.list?.[0]
+  if (!latest) throw new Error(`No data for ${symbol}`)
+
+  const longRatio  = parseFloat(latest.buyRatio)  * 100
+  const shortRatio = parseFloat(latest.sellRatio) * 100
+
   return {
     symbol:     symbol.replace('USDT', ''),
-    longRatio:  parseFloat(latest.longAccount)  * 100,
-    shortRatio: parseFloat(latest.shortAccount) * 100,
-    lsRatio:    parseFloat(latest.longShortRatio), // raw ratio (longs/shorts)
-    timestamp:  latest.timestamp,
+    longRatio,
+    shortRatio,
+    lsRatio:    longRatio / (shortRatio || 1),
+    timestamp:  parseInt(latest.timestamp),
   }
 }
 

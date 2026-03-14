@@ -2,32 +2,41 @@ export const revalidate = 0
 
 // Returns % return for each asset over 1d, 7d, 30d
 // minus BTC % return over same period = relative performance vs BTC
+// Yahoo Finance replaced with Twelve Data (no Vercel IP block)
 
-const YAHOO_SYMBOLS = ['SPY', 'QQQ', 'AUDUSD=X', 'AUDJPY=X', 'EURJPY=X', 'GC=F', 'CL=F', 'HG=F']
+const TD_KEY = process.env.TWELVE_DATA_API_KEY
+
+// Twelve Data symbols for non-crypto assets
+const TD_SYMBOLS = ['SPY', 'QQQ', 'AUD/USD', 'AUD/JPY', 'EUR/JPY', 'XAU/USD', 'WTI', 'COPPER']
+
+// Original Yahoo symbol → Twelve Data symbol map (for results keying)
+const TD_TO_YAHOO_KEY = {
+  'SPY':     'SPY',
+  'QQQ':     'QQQ',
+  'AUD/USD': 'AUDUSD=X',
+  'AUD/JPY': 'AUDJPY=X',
+  'EUR/JPY': 'EURJPY=X',
+  'XAU/USD': 'GC=F',
+  'WTI':     'CL=F',
+  'COPPER':  'HG=F',
+}
 
 const COINGECKO_IDS = [
   'bitcoin', 'ethereum', 'solana', 'sui', 'ripple',
   'monero', 'binancecoin', 'aave', 'dogecoin', 'pax-gold', 'hyperliquid'
 ]
 
-// Fetch 31 days of daily closes from Yahoo Finance v8 chart endpoint
-async function fetchYahooHistory(symbol) {
-  const now    = Math.floor(Date.now() / 1000)
-  const p1     = now - 32 * 86400 // 32 days back for buffer
-  const url    = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?period1=${p1}&period2=${now}&interval=1d`
+// Fetch 31 days of daily closes from Twelve Data
+async function fetchTDHistory(symbol) {
+  const url = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbol)}&interval=1day&outputsize=32&apikey=${TD_KEY}`
+  const res = await fetch(url, { next: { revalidate: 0 } })
+  if (!res.ok) throw new Error(`TD ${symbol}: ${res.status}`)
+  const json = await res.json()
+  if (json.status === 'error') throw new Error(`TD ${symbol}: ${json.message}`)
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 0 },
-  })
-  if (!res.ok) throw new Error(`Yahoo ${symbol}: ${res.status}`)
-  const json   = await res.json()
-  const result = json?.chart?.result?.[0]
-  if (!result) throw new Error(`No data for ${symbol}`)
-
-  const closes = result.indicators.quote[0].close
-  // Filter nulls (weekends/holidays), return as array newest-last
-  return closes.filter(c => c != null)
+  // values array is newest-first; reverse to oldest-first for pctReturn
+  const closes = json.values.map(v => parseFloat(v.close)).reverse()
+  return closes
 }
 
 // CoinGecko market_chart — returns [timestamp, price] array for 30 days
@@ -49,6 +58,10 @@ function pctReturn(prices, daysAgo) {
 }
 
 export async function GET() {
+  if (!TD_KEY) {
+    return Response.json({ ok: false, error: 'TWELVE_DATA_API_KEY not set' }, { status: 500 })
+  }
+
   try {
     // Fetch BTC history first (we need it as base for all comparisons)
     const btcPrices = await fetchCGHistory('bitcoin')
@@ -76,14 +89,15 @@ export async function GET() {
       } catch { results[id] = null }
     })
 
-    // Yahoo symbols
-    const yahooFetches = YAHOO_SYMBOLS.map(async sym => {
+    // Twelve Data symbols — fetch sequentially to avoid rate limits on free tier
+    const tdFetches = TD_SYMBOLS.map(async tdSym => {
+      const yahooKey = TD_TO_YAHOO_KEY[tdSym]
       try {
-        const prices = await fetchYahooHistory(sym)
+        const prices = await fetchTDHistory(tdSym)
         const r1d  = pctReturn(prices, 1)
         const r7d  = pctReturn(prices, 7)
         const r30d = pctReturn(prices, 30)
-        results[sym] = {
+        results[yahooKey] = {
           ret1d:  r1d,
           ret7d:  r7d,
           ret30d: r30d,
@@ -91,10 +105,10 @@ export async function GET() {
           vs7d:   r7d  != null && btc7d  != null ? r7d  - btc7d  : null,
           vs30d:  r30d != null && btc30d != null ? r30d - btc30d : null,
         }
-      } catch { results[sym] = null }
+      } catch { results[yahooKey] = null }
     })
 
-    await Promise.all([...cryptoFetches, ...yahooFetches])
+    await Promise.all([...cryptoFetches, ...tdFetches])
 
     return Response.json({ ok: true, btc: { ret1d: btc1d, ret7d: btc7d, ret30d: btc30d }, data: results })
   } catch (err) {
