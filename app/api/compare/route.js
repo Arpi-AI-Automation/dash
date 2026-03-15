@@ -91,9 +91,7 @@ export async function GET() {
     const btc7d  = btc.ret7d  ?? null
     const btc30d = btc.ret30d ?? null
 
-    const results = {
-      bitcoin: { ret1d: 0, ret7d: 0, ret30d: 0, vs1d: 0, vs7d: 0, vs30d: 0 }
-    }
+    const results = {}
 
     // Crypto from batch CG response
     for (const id of COINGECKO_IDS.filter(x => x !== 'bitcoin')) {

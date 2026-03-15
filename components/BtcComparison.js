@@ -3,7 +3,6 @@ import { useEffect, useState, useCallback } from 'react'
 import SectionHeader from './SectionHeader'
 
 const ASSET_MAP = [
-  { key: 'bitcoin',     name: 'Bitcoin',     symbol: 'BTC',     group: 'Crypto' },
   { key: 'ethereum',    name: 'Ethereum',    symbol: 'ETH',     group: 'Crypto' },
   { key: 'solana',      name: 'Solana',      symbol: 'SOL',     group: 'Crypto' },
   { key: 'sui',         name: 'Sui',         symbol: 'SUI',     group: 'Crypto' },
@@ -158,7 +157,7 @@ export default function BtcComparison() {
               <tr className="border-b border-[#222] bg-[#0f0f0f]">
                 <td className="px-4 py-3 text-sm text-[#f7931a] font-bold tracking-wider">₿ BTC BASE</td>
                 {[btc.ret1d, btc.ret7d, btc.ret30d].map((v, i) => (
-                  <td key={i} className={`px-4 py-3 text-center text-sm font-mono tabular-nums ${colorClass(v, true)}`}>
+                  <td key={i} className={`px-4 py-3 text-center text-sm font-mono tabular-nums ${colorClass(v)}`}>
                     {fmt(v) ?? '—'}
                   </td>
                 ))}
@@ -190,7 +189,7 @@ export default function BtcComparison() {
               {[{l:'24H',v:btc.ret1d},{l:'7D',v:btc.ret7d},{l:'30D',v:btc.ret30d}].map(({l,v}) => (
                 <div key={l} className="text-center">
                   <div className="text-[10px] text-[#444] tracking-widest mb-1">{l}</div>
-                  <div className={`text-sm font-mono tabular-nums ${colorClass(v, true)}`}>{fmt(v) ?? '—'}</div>
+                  <div className={`text-sm font-mono tabular-nums ${colorClass(v)}`}>{fmt(v) ?? '—'}</div>
                 </div>
               ))}
             </div>
