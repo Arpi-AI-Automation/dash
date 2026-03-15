@@ -7,22 +7,30 @@ import LongShortRatio from '../components/LongShortRatio'
 import DecisionChecklist from '../components/DecisionChecklist'
 import TvSignals from '../components/TvSignals'
 
-async function getSignal() {
+// Read Redis directly — avoids self-calling HTTP on Vercel
+async function getBtcSignal() {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_SITE_URL || 'https://dash-3n2o.vercel.app'}/api/signals?history=false`,
-      { next: { revalidate: 3600 } }
-    )
-    if (!res.ok) return null
+    const url = process.env.UPSTASH_REDIS_REST_URL
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN
+    if (!url || !token) return null
+
+    const res = await fetch(`${url}/get/signal:btc`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
     const data = await res.json()
-    return data.btc || null
+    if (!data.result) return null
+
+    // Handle single or double stringified
+    const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result
+    return typeof parsed === 'string' ? JSON.parse(parsed) : parsed
   } catch {
     return null
   }
 }
 
 export default async function Home() {
-  const btcSignal = await getSignal()
+  const btcSignal = await getBtcSignal()
 
   const stateColor = (state) =>
     state?.includes('LONG') ? '#22c55e' : state?.includes('SHORT') ? '#ef4444' : '#9ca3af'
