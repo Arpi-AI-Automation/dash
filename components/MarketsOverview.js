@@ -30,8 +30,7 @@ const MARKETS_META = {
   'AUD/JPY': { name: 'AUD/JPY',   symbol: 'AUD/JPY', group: 'forex' },
   'EUR/JPY': { name: 'EUR/JPY',   symbol: 'EUR/JPY', group: 'forex' },
   'XAU/USD': { name: 'Gold',      symbol: 'XAU/USD', group: 'commodities' },
-  'WTI':     { name: 'Crude Oil', symbol: 'WTI',     group: 'commodities' },
-  'COPPER':  { name: 'Copper',    symbol: 'COPPER',  group: 'commodities' },
+
 }
 
 export default function MarketsOverview() {

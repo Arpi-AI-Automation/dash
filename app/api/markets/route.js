@@ -1,52 +1,73 @@
 export const revalidate = 0
 
-// Twelve Data — stocks, forex, commodities
-// Fetching individually so one bad symbol doesn't wipe the rest.
+// Stocks: stooq.com (no key, no IP restrictions)
+// Forex + Gold: frankfurter.app (ECB rates, completely open)
 
-const TD_KEY = process.env.TWELVE_DATA_API_KEY
-
-const TD_SYMBOLS = {
-  SPY:       { name: 'S&P 500',   currency: 'USD' },
-  QQQ:       { name: 'Nasdaq',    currency: 'USD' },
-  'AUD/USD': { name: 'AUD/USD',   currency: 'USD' },
-  'AUD/JPY': { name: 'AUD/JPY',   currency: 'JPY' },
-  'EUR/JPY': { name: 'EUR/JPY',   currency: 'JPY' },
-  'XAU/USD': { name: 'Gold',      currency: 'USD' },
-  'WTI':     { name: 'Crude Oil', currency: 'USD' },
-  'COPPER':  { name: 'Copper',    currency: 'USD' },
-}
-
-async function fetchSymbol(sym, meta) {
+async function fetchStooq(symbol) {
   try {
-    const url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${TD_KEY}`
+    // stooq returns CSV: Date,Open,High,Low,Close,Volume
+    const url = `https://stooq.com/q/l/?s=${symbol}&f=sd2t2ohlcv&h&e=csv`
     const res = await fetch(url, { next: { revalidate: 0 } })
     if (!res.ok) return null
-    const q = await res.json()
-    if (q.status === 'error' || !q.close) return null
-    return {
-      price:     parseFloat(q.close),
-      change24h: parseFloat(q.percent_change),
-      currency:  meta.currency,
-    }
+    const text = await res.text()
+    const lines = text.trim().split('\n')
+    if (lines.length < 2) return null
+    const cols = lines[1].split(',')
+    const close = parseFloat(cols[4])
+    const open  = parseFloat(cols[2])
+    if (!close || !open || close === 0) return null
+    const change24h = ((close - open) / open) * 100
+    return { price: close, change24h, currency: 'USD' }
+  } catch {
+    return null
+  }
+}
+
+async function fetchFrankfurter(from, to) {
+  try {
+    // Latest rate
+    const url = `https://api.frankfurter.app/latest?from=${from}&to=${to}`
+    const res = await fetch(url, { next: { revalidate: 0 } })
+    if (!res.ok) return null
+    const json = await res.json()
+    const price = json.rates?.[to]
+    if (!price) return null
+
+    // Yesterday for % change
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    // Skip weekends - go back to Friday
+    if (yesterday.getDay() === 0) yesterday.setDate(yesterday.getDate() - 2)
+    if (yesterday.getDay() === 6) yesterday.setDate(yesterday.getDate() - 1)
+    const dateStr = yesterday.toISOString().split('T')[0]
+    const resY = await fetch(`https://api.frankfurter.app/${dateStr}?from=${from}&to=${to}`, { next: { revalidate: 0 } })
+    if (!resY.ok) return { price, change24h: null, currency: to }
+    const jsonY = await resY.json()
+    const prevPrice = jsonY.rates?.[to]
+    const change24h = prevPrice ? ((price - prevPrice) / prevPrice) * 100 : null
+    return { price, change24h, currency: to }
   } catch {
     return null
   }
 }
 
 export async function GET() {
-  if (!TD_KEY) {
-    return Response.json({ ok: false, error: 'TWELVE_DATA_API_KEY not set' }, { status: 500 })
-  }
+  const [spy, qqq, audusd, audjpy, eurjpy, xauusd] = await Promise.all([
+    fetchStooq('spy.us'),
+    fetchStooq('qqq.us'),
+    fetchFrankfurter('AUD', 'USD'),
+    fetchFrankfurter('AUD', 'JPY'),
+    fetchFrankfurter('EUR', 'JPY'),
+    fetchFrankfurter('XAU', 'USD'),
+  ])
 
-  const entries = Object.entries(TD_SYMBOLS)
-  const results = await Promise.all(entries.map(([sym, meta]) => fetchSymbol(sym, meta)))
+  const data = {}
+  if (spy)    data['SPY']     = spy
+  if (qqq)    data['QQQ']     = qqq
+  if (audusd) data['AUD/USD'] = audusd
+  if (audjpy) data['AUD/JPY'] = audjpy
+  if (eurjpy) data['EUR/JPY'] = eurjpy
+  if (xauusd) data['XAU/USD'] = xauusd
 
-  const mapped = {}
-  for (let i = 0; i < entries.length; i++) {
-    if (results[i] !== null) {
-      mapped[entries[i][0]] = results[i]
-    }
-  }
-
-  return Response.json({ ok: true, data: mapped })
+  return Response.json({ ok: true, data })
 }

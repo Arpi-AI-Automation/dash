@@ -25,8 +25,7 @@ const ASSET_MAP = [
   { key: 'EUR/JPY',     name: 'EUR/JPY',     symbol: 'EUR/JPY',  group: 'Forex' },
   // Commodities — keys now Twelve Data format
   { key: 'XAU/USD',     name: 'Gold',        symbol: 'XAU/USD',  group: 'Commodities' },
-  { key: 'WTI',         name: 'Crude Oil',   symbol: 'WTI',      group: 'Commodities' },
-  { key: 'COPPER',      name: 'Copper',      symbol: 'COPPER',   group: 'Commodities' },
+
 ]
 
 function DeltaCell({ value }) {
