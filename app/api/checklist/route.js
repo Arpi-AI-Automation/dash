@@ -46,41 +46,44 @@ async function getLongShort() {
 }
 
 async function getOpenInterest() {
-  // Bybit open interest (single snapshot) + mark price from ticker
-  const [oiRes, tickerRes] = await Promise.all([
-    fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=1',
-      { next: { revalidate: 0 } }),
-    fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT',
-      { next: { revalidate: 0 } }),
-  ])
-  const oiJson     = await oiRes.json()
-  const tickerJson = await tickerRes.json()
-
-  const oiBtc  = parseFloat(oiJson.result?.list?.[0]?.openInterest ?? 0)
-  const markPx = parseFloat(tickerJson.result?.list?.[0]?.markPrice ?? 0)
-  return oiBtc * markPx // USD notional
+  try {
+    const [oiRes, tickerRes] = await Promise.all([
+      fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=1',
+        { next: { revalidate: 0 } }),
+      fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT',
+        { next: { revalidate: 0 } }),
+    ])
+    if (!oiRes.ok) throw new Error(`OI ${oiRes.status}`)
+    const oiJson     = await oiRes.json()
+    const tickerJson = await tickerRes.json()
+    if (oiJson.retCode !== 0) throw new Error(oiJson.retMsg)
+    const oiBtc  = parseFloat(oiJson.result?.list?.[0]?.openInterest ?? 0)
+    const markPx = parseFloat(tickerJson.result?.list?.[0]?.markPrice ?? 0)
+    return oiBtc * markPx
+  } catch { return 0 }
 }
 
 async function getOiHistory() {
-  // Bybit: last 5 hourly OI snapshots to detect rising/falling
-  const res = await fetch(
-    'https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=5',
-    { next: { revalidate: 0 } }
-  )
-  const json = await res.json()
-  const list = json.result?.list
-  if (!list || list.length < 2) return null
-
-  // Bybit returns newest-first — reverse to oldest-first
-  const sorted  = [...list].reverse()
-  const oldest  = parseFloat(sorted[0].openInterestValue)
-  const newest  = parseFloat(sorted[sorted.length - 1].openInterestValue)
-  return { oldest, newest, rising: newest > oldest }
+  try {
+    const res = await fetch(
+      'https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=6',
+      { next: { revalidate: 0 } }
+    )
+    if (!res.ok) throw new Error(`OI history ${res.status}`)
+    const json = await res.json()
+    if (json.retCode !== 0) throw new Error(json.retMsg)
+    const list = json.result?.list
+    if (!list || list.length < 2) return null
+    const sorted = [...list].reverse()
+    const oldest = parseFloat(sorted[0].openInterestValue)
+    const newest = parseFloat(sorted[sorted.length - 1].openInterestValue)
+    return { oldest, newest, rising: newest > oldest }
+  } catch { return null }
 }
 
 export async function GET() {
   try {
-    const [btc, fundingRate, fearGreed, longShort, oiUsd, oiHistory] = await Promise.all([
+    const settled = await Promise.allSettled([
       getBtcData(),
       getFundingRate(),
       getFearGreed(),
@@ -88,6 +91,13 @@ export async function GET() {
       getOpenInterest(),
       getOiHistory(),
     ])
+    const [btcR, frR, fgR, lsR, oiR, oiHR] = settled
+    const btc         = btcR.status === 'fulfilled'  ? btcR.value  : { price: 0, change24h: 0 }
+    const fundingRate = frR.status === 'fulfilled'   ? frR.value   : 0
+    const fearGreed   = fgR.status === 'fulfilled'   ? fgR.value   : 50
+    const longShort   = lsR.status === 'fulfilled'   ? lsR.value   : { longRatio: 50, shortRatio: 50 }
+    const oiUsd       = oiR.status === 'fulfilled'   ? oiR.value   : 0
+    const oiHistory   = oiHR.status === 'fulfilled'  ? oiHR.value  : null
 
     const frPct = fundingRate * 100
 
