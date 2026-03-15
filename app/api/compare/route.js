@@ -5,23 +5,24 @@ const COINGECKO_IDS = [
   'monero', 'binancecoin', 'aave', 'dogecoin', 'pax-gold', 'hyperliquid'
 ]
 
-const sleep = ms => new Promise(r => setTimeout(r, ms))
-
-async function fetchCGHistory(id, retries = 2) {
-  for (let i = 0; i <= retries; i++) {
-    try {
-      const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=35&interval=daily`
-      const res = await fetch(url, { next: { revalidate: 0 } })
-      if (res.status === 429) {
-        await sleep(2000 * (i + 1))
-        continue
+// Single batch call for all coins - much faster than sequential
+async function fetchAllCGHistory() {
+  const results = {}
+  try {
+    // CoinGecko /coins/markets gives 24h + 7d change in one call
+    const url = `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${COINGECKO_IDS.join(',')}&price_change_percentage=1h,24h,7d,30d&per_page=50`
+    const res = await fetch(url, { next: { revalidate: 0 } })
+    if (!res.ok) return results
+    const coins = await res.json()
+    for (const coin of coins) {
+      results[coin.id] = {
+        ret1d:  coin.price_change_percentage_24h_in_currency ?? null,
+        ret7d:  coin.price_change_percentage_7d_in_currency  ?? null,
+        ret30d: coin.price_change_percentage_30d_in_currency ?? null,
       }
-      if (!res.ok) return null
-      const json = await res.json()
-      return json.prices?.map(p => p[1]) ?? null
-    } catch { return null }
-  }
-  return null
+    }
+  } catch {}
+  return results
 }
 
 async function fetchStooqHistory(symbol) {
@@ -38,12 +39,12 @@ async function fetchStooqHistory(symbol) {
 
 async function fetchFrankfurterHistory(from, to) {
   try {
-    const end = new Date().toISOString().split('T')[0]
+    const end   = new Date().toISOString().split('T')[0]
     const start = new Date(Date.now() - 45 * 86400000).toISOString().split('T')[0]
-    const url = `https://api.frankfurter.app/${start}..${end}?from=${from}&to=${to}`
-    const res = await fetch(url, { next: { revalidate: 0 } })
+    const url   = `https://api.frankfurter.app/${start}..${end}?from=${from}&to=${to}`
+    const res   = await fetch(url, { next: { revalidate: 0 } })
     if (!res.ok) return null
-    const json = await res.json()
+    const json  = await res.json()
     const dates = Object.keys(json.rates).sort()
     return dates.map(d => json.rates[d][to])
   } catch { return null }
@@ -57,10 +58,7 @@ function pctReturn(prices, daysAgo) {
   return ((current - past) / past) * 100
 }
 
-function mkRow(prices, btc1d, btc7d, btc30d) {
-  const r1d = pctReturn(prices, 1)
-  const r7d = pctReturn(prices, 7)
-  const r30d = pctReturn(prices, 30)
+function mkRow(r1d, r7d, r30d, btc1d, btc7d, btc30d) {
   return {
     ret1d: r1d, ret7d: r7d, ret30d: r30d,
     vs1d:  r1d  != null && btc1d  != null ? r1d  - btc1d  : null,
@@ -69,46 +67,48 @@ function mkRow(prices, btc1d, btc7d, btc30d) {
   }
 }
 
+function mkRowFromPrices(prices, btc1d, btc7d, btc30d) {
+  return mkRow(
+    pctReturn(prices, 1), pctReturn(prices, 7), pctReturn(prices, 30),
+    btc1d, btc7d, btc30d
+  )
+}
+
 export async function GET() {
   try {
-    // Fetch crypto sequentially to avoid CoinGecko rate limits
-    const cgData = {}
-    for (const id of COINGECKO_IDS) {
-      cgData[id] = await fetchCGHistory(id)
-      await sleep(300) // 300ms between each CG call
-    }
+    // All fetches in parallel - CG batch + stooq + frankfurter
+    const [cgData, spyPrices, qqqPrices, audUsd, audJpy, eurJpy] = await Promise.all([
+      fetchAllCGHistory(),
+      fetchStooqHistory('spy.us'),
+      fetchStooqHistory('qqq.us'),
+      fetchFrankfurterHistory('AUD', 'USD'),
+      fetchFrankfurterHistory('AUD', 'JPY'),
+      fetchFrankfurterHistory('EUR', 'JPY'),
+    ])
 
-    const btcPrices = cgData['bitcoin']
-    const btc1d  = pctReturn(btcPrices, 1)
-    const btc7d  = pctReturn(btcPrices, 7)
-    const btc30d = pctReturn(btcPrices, 30)
+    const btc    = cgData['bitcoin'] ?? {}
+    const btc1d  = btc.ret1d  ?? null
+    const btc7d  = btc.ret7d  ?? null
+    const btc30d = btc.ret30d ?? null
 
     const results = {
       bitcoin: { ret1d: 0, ret7d: 0, ret30d: 0, vs1d: 0, vs7d: 0, vs30d: 0 }
     }
 
-    // Crypto rows
+    // Crypto from batch CG response
     for (const id of COINGECKO_IDS.filter(x => x !== 'bitcoin')) {
-      results[id] = mkRow(cgData[id], btc1d, btc7d, btc30d)
+      const d = cgData[id] ?? {}
+      results[id] = mkRow(d.ret1d ?? null, d.ret7d ?? null, d.ret30d ?? null, btc1d, btc7d, btc30d)
     }
 
-    // Equities (parallel, different source)
-    const [spyPrices, qqqPrices] = await Promise.all([
-      fetchStooqHistory('spy.us'),
-      fetchStooqHistory('qqq.us'),
-    ])
-    results['SPY'] = mkRow(spyPrices, btc1d, btc7d, btc30d)
-    results['QQQ'] = mkRow(qqqPrices, btc1d, btc7d, btc30d)
+    // Equities
+    results['SPY'] = mkRowFromPrices(spyPrices, btc1d, btc7d, btc30d)
+    results['QQQ'] = mkRowFromPrices(qqqPrices, btc1d, btc7d, btc30d)
 
-    // Forex (45-day window → enough trading days for 30d)
-    const [audUsd, audJpy, eurJpy] = await Promise.all([
-      fetchFrankfurterHistory('AUD', 'USD'),
-      fetchFrankfurterHistory('AUD', 'JPY'),
-      fetchFrankfurterHistory('EUR', 'JPY'),
-    ])
-    results['AUD/USD'] = mkRow(audUsd, btc1d, btc7d, btc30d)
-    results['AUD/JPY'] = mkRow(audJpy, btc1d, btc7d, btc30d)
-    results['EUR/JPY'] = mkRow(eurJpy, btc1d, btc7d, btc30d)
+    // Forex
+    results['AUD/USD'] = mkRowFromPrices(audUsd, btc1d, btc7d, btc30d)
+    results['AUD/JPY'] = mkRowFromPrices(audJpy, btc1d, btc7d, btc30d)
+    results['EUR/JPY'] = mkRowFromPrices(eurJpy, btc1d, btc7d, btc30d)
 
     return Response.json({ ok: true, btc: { ret1d: btc1d, ret7d: btc7d, ret30d: btc30d }, data: results })
   } catch (err) {
