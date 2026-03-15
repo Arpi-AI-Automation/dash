@@ -22,15 +22,12 @@ const CRYPTO_META = {
   hyperliquid: { name: 'Hyperliquid', symbol: 'HYPE' },
 }
 
-// Keys now match Twelve Data symbol format (no Yahoo =X / =F suffixes)
 const MARKETS_META = {
   'SPY':     { name: 'S&P 500',   symbol: 'SPY',     group: 'stocks' },
   'QQQ':     { name: 'Nasdaq',    symbol: 'QQQ',     group: 'stocks' },
   'AUD/USD': { name: 'AUD/USD',   symbol: 'AUD/USD', group: 'forex' },
   'AUD/JPY': { name: 'AUD/JPY',   symbol: 'AUD/JPY', group: 'forex' },
   'EUR/JPY': { name: 'EUR/JPY',   symbol: 'EUR/JPY', group: 'forex' },
-  'XAU/USD': { name: 'Gold',      symbol: 'XAU/USD', group: 'commodities' },
-
 }
 
 export default function MarketsOverview() {
@@ -89,9 +86,8 @@ export default function MarketsOverview() {
     }
   })
 
-  const stockCards      = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'stocks').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
-  const forexCards      = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'forex').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
-  const commodityCards  = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'commodities').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
+  const stockCards = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'stocks').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
+  const forexCards = Object.entries(MARKETS_META).filter(([,m]) => m.group === 'forex').map(([k, m]) => ({ ...m, key: k, ...markets[k] }))
 
   if (loading) {
     return (
@@ -141,19 +137,9 @@ export default function MarketsOverview() {
         </div>
       </section>
 
-      {/* COMMODITIES */}
-      <section>
-        <SectionHeader label="Commodities" />
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {commodityCards.map(c => (
-            <AssetCard key={c.key} name={c.name} symbol={c.symbol} price={c.price} change24h={c.change24h} currency="USD" audRate={audRate} />
-          ))}
-        </div>
-      </section>
-
       <div className="text-[10px] text-[#333] tracking-widest pt-2">
         LAST UPDATE {lastUpdated?.toLocaleTimeString('en-US', { hour12: false })}
-        {' · '}CRYPTO VIA COINGECKO · MARKETS VIA TWELVE DATA · REFRESHES 60S
+        {' · '}CRYPTO VIA COINGECKO · MARKETS VIA STOOQ/FRANKFURTER · REFRESHES 60S
       </div>
     </div>
   )

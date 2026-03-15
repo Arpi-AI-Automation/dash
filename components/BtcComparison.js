@@ -24,7 +24,7 @@ const ASSET_MAP = [
   { key: 'AUD/JPY',     name: 'AUD/JPY',     symbol: 'AUD/JPY',  group: 'Forex' },
   { key: 'EUR/JPY',     name: 'EUR/JPY',     symbol: 'EUR/JPY',  group: 'Forex' },
   // Commodities — keys now Twelve Data format
-  { key: 'XAU/USD',     name: 'Gold',        symbol: 'XAU/USD',  group: 'Commodities' },
+
 
 ]
 
