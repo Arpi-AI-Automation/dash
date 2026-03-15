@@ -6,13 +6,13 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'Arpi-vypi-2026-btc'
 
 async function redisSet(key, value) {
-  const res = await fetch(`${REDIS_URL}/set/${key}`, {
-    method: 'POST',
+  // Use query param to set string value directly — avoids double-stringify
+  const encoded = encodeURIComponent(JSON.stringify(value))
+  const res = await fetch(`${REDIS_URL}/set/${key}/${encoded}`, {
+    method: 'GET',
     headers: {
       Authorization: `Bearer ${REDIS_TOKEN}`,
-      'Content-Type': 'application/json',
     },
-    body: JSON.stringify(value),
   })
   return res.json()
 }
