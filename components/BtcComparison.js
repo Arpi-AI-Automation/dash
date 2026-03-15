@@ -2,53 +2,90 @@
 import { useEffect, useState, useCallback } from 'react'
 import SectionHeader from './SectionHeader'
 
-// Maps every asset to display name + group
 const ASSET_MAP = [
-  // Crypto
-  { key: 'bitcoin',     name: 'Bitcoin',     symbol: 'BTC',      group: 'Crypto' },
-  { key: 'ethereum',    name: 'Ethereum',    symbol: 'ETH',      group: 'Crypto' },
-  { key: 'solana',      name: 'Solana',      symbol: 'SOL',      group: 'Crypto' },
-  { key: 'sui',         name: 'Sui',         symbol: 'SUI',      group: 'Crypto' },
-  { key: 'ripple',      name: 'XRP',         symbol: 'XRP',      group: 'Crypto' },
-  { key: 'monero',      name: 'Monero',      symbol: 'XMR',      group: 'Crypto' },
-  { key: 'binancecoin', name: 'BNB',         symbol: 'BNB',      group: 'Crypto' },
-  { key: 'aave',        name: 'Aave',        symbol: 'AAVE',     group: 'Crypto' },
-  { key: 'dogecoin',    name: 'Dogecoin',    symbol: 'DOGE',     group: 'Crypto' },
-  { key: 'pax-gold',    name: 'PAX Gold',    symbol: 'PAXG',     group: 'Crypto' },
-  { key: 'hyperliquid', name: 'Hyperliquid', symbol: 'HYPE',     group: 'Crypto' },
-  // Equities
-  { key: 'SPY',         name: 'S&P 500',     symbol: 'SPY',      group: 'Equities' },
-  { key: 'QQQ',         name: 'Nasdaq',      symbol: 'QQQ',      group: 'Equities' },
-  // Forex
-  { key: 'AUD/USD',     name: 'AUD/USD',     symbol: 'AUD/USD',  group: 'Forex' },
-  { key: 'AUD/JPY',     name: 'AUD/JPY',     symbol: 'AUD/JPY',  group: 'Forex' },
-  { key: 'EUR/JPY',     name: 'EUR/JPY',     symbol: 'EUR/JPY',  group: 'Forex' },
-  // Commodities — keys now Twelve Data format
-
-
+  { key: 'bitcoin',     name: 'Bitcoin',     symbol: 'BTC',     group: 'Crypto' },
+  { key: 'ethereum',    name: 'Ethereum',    symbol: 'ETH',     group: 'Crypto' },
+  { key: 'solana',      name: 'Solana',      symbol: 'SOL',     group: 'Crypto' },
+  { key: 'sui',         name: 'Sui',         symbol: 'SUI',     group: 'Crypto' },
+  { key: 'ripple',      name: 'XRP',         symbol: 'XRP',     group: 'Crypto' },
+  { key: 'monero',      name: 'Monero',      symbol: 'XMR',     group: 'Crypto' },
+  { key: 'binancecoin', name: 'BNB',         symbol: 'BNB',     group: 'Crypto' },
+  { key: 'aave',        name: 'Aave',        symbol: 'AAVE',    group: 'Crypto' },
+  { key: 'dogecoin',    name: 'Dogecoin',    symbol: 'DOGE',    group: 'Crypto' },
+  { key: 'pax-gold',    name: 'PAX Gold',    symbol: 'PAXG',    group: 'Crypto' },
+  { key: 'hyperliquid', name: 'Hyperliquid', symbol: 'HYPE',    group: 'Crypto' },
+  { key: 'SPY',         name: 'S&P 500',     symbol: 'SPY',     group: 'Equities' },
+  { key: 'QQQ',         name: 'Nasdaq',      symbol: 'QQQ',     group: 'Equities' },
+  { key: 'AUD/USD',     name: 'AUD/USD',     symbol: 'AUD/USD', group: 'Forex' },
+  { key: 'AUD/JPY',     name: 'AUD/JPY',     symbol: 'AUD/JPY', group: 'Forex' },
+  { key: 'EUR/JPY',     name: 'EUR/JPY',     symbol: 'EUR/JPY', group: 'Forex' },
 ]
 
-function DeltaCell({ value }) {
-  if (value == null) return <td className="px-3 py-2 text-center text-[#333] text-xs">—</td>
+function fmt(v) {
+  if (v == null) return null
+  return (v > 0 ? '+' : '') + v.toFixed(2) + '%'
+}
 
-  const isPos = value > 0.05
-  const isNeg = value < -0.05
+function colorClass(v, neutral = false) {
+  if (v == null) return 'text-[#3a3a3a]'
+  if (neutral) return 'text-[#888]'
+  if (v > 0.05)  return 'text-emerald-400'
+  if (v < -0.05) return 'text-red-400'
+  return 'text-[#888]'
+}
 
+// Desktop row
+function AssetRow({ asset, d, btc }) {
   return (
-    <td className={`px-3 py-2 text-center text-xs font-mono tabular-nums ${
-      isPos ? 'text-green-400' : isNeg ? 'text-red-400' : 'text-[#555]'
-    }`}>
-      {value > 0 ? '+' : ''}{value.toFixed(2)}%
-    </td>
+    <tr className="border-b border-[#111] hover:bg-[#0d0d0d] transition-colors">
+      <td className="px-4 py-3 w-36">
+        <div className="text-sm font-semibold text-[#ccc] tracking-wide">{asset.symbol}</div>
+        <div className="text-xs text-[#555] mt-0.5">{asset.name}</div>
+      </td>
+      {/* Asset returns — coloured green/red */}
+      {[d?.ret1d, d?.ret7d, d?.ret30d].map((v, i) => (
+        <td key={i} className={`px-4 py-3 text-center text-sm font-mono tabular-nums ${colorClass(v)}`}>
+          {fmt(v) ?? '—'}
+        </td>
+      ))}
+      <td className="w-px bg-[#1a1a1a]" />
+      {/* Delta vs BTC */}
+      {[d?.vs1d, d?.vs7d, d?.vs30d].map((v, i) => (
+        <td key={i} className={`px-4 py-3 text-center text-sm font-mono tabular-nums ${colorClass(v)}`}>
+          {fmt(v) ?? '—'}
+        </td>
+      ))}
+    </tr>
   )
 }
 
-function ReturnCell({ value }) {
-  if (value == null) return <td className="px-3 py-2 text-center text-[#333] text-xs">—</td>
+// Mobile card — stacks nicely, one per asset
+function AssetCard({ asset, d }) {
+  const periods = [
+    { label: '24H', ret: d?.ret1d, vs: d?.vs1d },
+    { label: '7D',  ret: d?.ret7d, vs: d?.vs7d },
+    { label: '30D', ret: d?.ret30d, vs: d?.vs30d },
+  ]
   return (
-    <td className={`px-3 py-2 text-center text-xs font-mono tabular-nums text-[#555]`}>
-      {value > 0 ? '+' : ''}{value.toFixed(2)}%
-    </td>
+    <div className="bg-[#0d0d0d] border border-[#1a1a1a] rounded p-3 mb-2">
+      <div className="flex items-baseline gap-2 mb-3">
+        <span className="text-base font-semibold text-[#ccc]">{asset.symbol}</span>
+        <span className="text-xs text-[#555]">{asset.name}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {periods.map(({ label, ret, vs }) => (
+          <div key={label} className="text-center">
+            <div className="text-[10px] text-[#444] tracking-widest mb-1">{label}</div>
+            <div className={`text-sm font-mono tabular-nums ${colorClass(ret)}`}>
+              {fmt(ret) ?? '—'}
+            </div>
+            <div className={`text-xs font-mono tabular-nums mt-0.5 ${colorClass(vs)}`}>
+              {fmt(vs) ? `Δ${fmt(vs)}` : '—'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -77,7 +114,6 @@ export default function BtcComparison() {
 
   useEffect(() => {
     fetchData()
-    // Compare data is heavy — refresh every 5 min
     const interval = setInterval(fetchData, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [fetchData])
@@ -87,99 +123,93 @@ export default function BtcComparison() {
   return (
     <div className="mt-10">
       <SectionHeader label="vs BTC" />
-
       <div className="text-[10px] text-[#444] tracking-wider mb-4">
-        DELTA = ASSET RETURN − BTC RETURN OVER PERIOD · GREEN = BEAT BTC · RED = LOST TO BTC
+        DELTA = ASSET RETURN − BTC RETURN · GREEN = BEAT BTC · RED = LOST TO BTC
       </div>
 
       {loading && (
-        <div className="text-[#555] text-xs tracking-widest py-6">
-          CALCULATING<span className="cursor" />
-        </div>
+        <div className="text-[#555] text-xs tracking-widest py-6">CALCULATING<span className="cursor" /></div>
       )}
+      {error && <div className="text-red-500 text-xs py-4">ERR: {error}</div>}
 
-      {error && (
-        <div className="text-red-500 text-xs py-4">ERR: {error}</div>
-      )}
+      {!loading && !error && data && btc && (<>
 
-      {!loading && !error && data && btc && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm border-collapse">
+        {/* ── DESKTOP TABLE (md+) ── */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-[#1e1e1e]">
-                <th className="px-3 py-2 text-left text-[10px] text-[#444] tracking-widest font-normal w-32">ASSET</th>
-                {/* BTC absolute returns for reference */}
-                <th className="px-3 py-2 text-center text-[10px] text-[#444] tracking-widest font-normal" colSpan={3}>
-                  ASSET RETURN
-                </th>
+                <th className="px-4 py-2 text-left text-[10px] text-[#444] tracking-widest font-normal w-36">ASSET</th>
+                <th className="px-4 py-2 text-center text-[10px] text-[#666] tracking-widest font-normal" colSpan={3}>ASSET RETURN</th>
                 <th className="w-px bg-[#1e1e1e]" />
-                <th className="px-3 py-2 text-center text-[10px] text-[#f7931a] tracking-widest font-normal" colSpan={3}>
-                  ΔBTC (OUTPERFORMANCE)
-                </th>
+                <th className="px-4 py-2 text-center text-[10px] text-[#f7931a] tracking-widest font-normal" colSpan={3}>ΔBTC OUTPERFORMANCE</th>
               </tr>
               <tr className="border-b border-[#1e1e1e]">
-                <th className="px-3 py-2 text-left text-[10px] text-[#333] font-normal"></th>
-                <th className="px-3 py-2 text-center text-[10px] text-[#444] font-normal tracking-widest">24H</th>
-                <th className="px-3 py-2 text-center text-[10px] text-[#444] font-normal tracking-widest">7D</th>
-                <th className="px-3 py-2 text-center text-[10px] text-[#444] font-normal tracking-widest">30D</th>
+                <th className="px-4 py-2" />
+                {['24H','7D','30D'].map(h => (
+                  <th key={h} className="px-4 py-2 text-center text-[10px] text-[#555] font-normal tracking-widest">{h}</th>
+                ))}
                 <th className="w-px bg-[#1e1e1e]" />
-                <th className="px-3 py-2 text-center text-[10px] text-[#f7931a] font-normal tracking-widest">24H</th>
-                <th className="px-3 py-2 text-center text-[10px] text-[#f7931a] font-normal tracking-widest">7D</th>
-                <th className="px-3 py-2 text-center text-[10px] text-[#f7931a] font-normal tracking-widest">30D</th>
+                {['24H','7D','30D'].map(h => (
+                  <th key={h} className="px-4 py-2 text-center text-[10px] text-[#f7931a] font-normal tracking-widest">{h}</th>
+                ))}
               </tr>
-              {/* BTC baseline row */}
-              <tr className="border-b border-[#2a2a2a] bg-[#111]">
-                <td className="px-3 py-2 text-[10px] text-[#f7931a] tracking-widest font-bold">
-                  ₿ BTC BASE
-                </td>
-                <ReturnCell value={btc.ret1d} />
-                <ReturnCell value={btc.ret7d} />
-                <ReturnCell value={btc.ret30d} />
-                <td className="w-px bg-[#1e1e1e]" />
-                <td className="px-3 py-2 text-center text-[10px] text-[#333]">—</td>
-                <td className="px-3 py-2 text-center text-[10px] text-[#333]">—</td>
-                <td className="px-3 py-2 text-center text-[10px] text-[#333]">—</td>
+              {/* BTC baseline */}
+              <tr className="border-b border-[#222] bg-[#0f0f0f]">
+                <td className="px-4 py-3 text-sm text-[#f7931a] font-bold tracking-wider">₿ BTC BASE</td>
+                {[btc.ret1d, btc.ret7d, btc.ret30d].map((v, i) => (
+                  <td key={i} className={`px-4 py-3 text-center text-sm font-mono tabular-nums ${colorClass(v, true)}`}>
+                    {fmt(v) ?? '—'}
+                  </td>
+                ))}
+                <td className="w-px bg-[#1a1a1a]" />
+                <td colSpan={3} className="px-4 py-3 text-center text-[#333] text-xs">— — —</td>
               </tr>
             </thead>
             <tbody>
               {groups.map(group => (
                 <>
-                  <tr key={`group-${group}`} className="border-t border-[#1a1a1a]">
-                    <td colSpan={8} className="px-3 pt-3 pb-1 text-[9px] text-[#333] tracking-[0.2em] uppercase">
-                      {group}
-                    </td>
+                  <tr key={`g-${group}`}>
+                    <td colSpan={8} className="px-4 pt-4 pb-1 text-[10px] text-[#444] tracking-[0.2em] uppercase">{group}</td>
                   </tr>
-                  {ASSET_MAP.filter(a => a.group === group).map(asset => {
-                    const d = data[asset.key]
-                    return (
-                      <tr
-                        key={asset.key}
-                        className="border-b border-[#111] hover:bg-[#0f0f0f] transition-colors"
-                      >
-                        <td className="px-3 py-2">
-                          <div className="text-[11px] text-[#888]">{asset.symbol}</div>
-                          <div className="text-[10px] text-[#444]">{asset.name}</div>
-                        </td>
-                        <ReturnCell value={d?.ret1d} />
-                        <ReturnCell value={d?.ret7d} />
-                        <ReturnCell value={d?.ret30d} />
-                        <td className="w-px bg-[#1a1a1a]" />
-                        <DeltaCell value={d?.vs1d} />
-                        <DeltaCell value={d?.vs7d} />
-                        <DeltaCell value={d?.vs30d} />
-                      </tr>
-                    )
-                  })}
+                  {ASSET_MAP.filter(a => a.group === group).map(asset => (
+                    <AssetRow key={asset.key} asset={asset} d={data[asset.key]} btc={btc} />
+                  ))}
                 </>
               ))}
             </tbody>
           </table>
-
-          <div className="mt-3 text-[10px] text-[#2a2a2a] tracking-widest">
-            LAST UPDATE {lastUpdated?.toLocaleTimeString('en-US', { hour12: false })} · REFRESHES EVERY 5 MIN
-          </div>
         </div>
-      )}
+
+        {/* ── MOBILE CARDS (< md) ── */}
+        <div className="md:hidden">
+          {/* BTC baseline card */}
+          <div className="bg-[#0f0f0f] border border-[#f7931a22] rounded p-3 mb-4">
+            <div className="text-sm font-bold text-[#f7931a] mb-3">₿ BTC BASE</div>
+            <div className="grid grid-cols-3 gap-2">
+              {[{l:'24H',v:btc.ret1d},{l:'7D',v:btc.ret7d},{l:'30D',v:btc.ret30d}].map(({l,v}) => (
+                <div key={l} className="text-center">
+                  <div className="text-[10px] text-[#444] tracking-widest mb-1">{l}</div>
+                  <div className={`text-sm font-mono tabular-nums ${colorClass(v, true)}`}>{fmt(v) ?? '—'}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {groups.map(group => (
+            <div key={group} className="mb-4">
+              <div className="text-[10px] text-[#444] tracking-[0.2em] uppercase mb-2">{group}</div>
+              {ASSET_MAP.filter(a => a.group === group).map(asset => (
+                <AssetCard key={asset.key} asset={asset} d={data[asset.key]} />
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-4 text-[10px] text-[#2a2a2a] tracking-widest">
+          LAST UPDATE {lastUpdated?.toLocaleTimeString('en-US', { hour12: false })} · REFRESHES EVERY 5 MIN
+        </div>
+      </>)}
     </div>
   )
 }
