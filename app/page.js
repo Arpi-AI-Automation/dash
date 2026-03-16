@@ -1,104 +1,98 @@
-import Nav from '../components/Nav'
-import MarketsOverview from '../components/MarketsOverview'
-import BtcComparison from '../components/BtcComparison'
-import FearGreed from '../components/FearGreed'
-import FundingRate from '../components/FundingRate'
-import LongShortRatio from '../components/LongShortRatio'
-import DecisionChecklist from '../components/DecisionChecklist'
-import ChecklistBacktest from '../components/ChecklistBacktest'
-import TvSignals from '../components/TvSignals'
-import RotationChart from '../components/RotationChart'
+'use client'
+import { useEffect, useState, useRef } from 'react'
 
-// Read Redis directly — avoids self-calling HTTP on Vercel
-async function getBtcSignal() {
-  try {
-    const url = process.env.UPSTASH_REDIS_REST_URL
-    const token = process.env.UPSTASH_REDIS_REST_TOKEN
-    if (!url || !token) return null
+const COINS = [
+  { id: 'bitcoin',     symbol: 'BTC',  name: 'Bitcoin'     },
+  { id: 'ethereum',    symbol: 'ETH',  name: 'Ethereum'    },
+  { id: 'solana',      symbol: 'SOL',  name: 'Solana'      },
+  { id: 'sui',         symbol: 'SUI',  name: 'Sui'         },
+  { id: 'ripple',      symbol: 'XRP',  name: 'XRP'         },
+  { id: 'binancecoin', symbol: 'BNB',  name: 'BNB'         },
+  { id: 'aave',        symbol: 'AAVE', name: 'Aave'        },
+  { id: 'dogecoin',    symbol: 'DOGE', name: 'Dogecoin'    },
+  { id: 'hyperliquid', symbol: 'HYPE', name: 'Hyperliquid' },
+  { id: 'pax-gold',    symbol: 'PAXG', name: 'PAX Gold'    },
+  { id: 'monero',      symbol: 'XMR',  name: 'Monero'      },
+]
 
-    const res = await fetch(`${url}/get/signal:btc`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: 'no-store',
-    })
-    const data = await res.json()
-    if (!data.result) return null
-
-    // Handle single or double stringified
-    const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result
-    return typeof parsed === 'string' ? JSON.parse(parsed) : parsed
-  } catch {
-    return null
-  }
+function TickerItem({ symbol, price, change }) {
+  const up = change >= 0
+  return (
+    <span className="inline-flex items-center gap-2 px-5 border-r border-[#111] whitespace-nowrap">
+      <span className="text-[10px] font-bold tracking-widest text-[#666]">{symbol}</span>
+      <span className="text-[11px] font-bold text-[#e8e8e8]">
+        ${price < 1 ? price.toFixed(4) : price < 100 ? price.toFixed(2) : price.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+      </span>
+      <span className="text-[10px] font-bold" style={{ color: up ? '#22c55e' : '#ef4444' }}>
+        {up ? '+' : ''}{change.toFixed(2)}%
+      </span>
+    </span>
+  )
 }
 
-export default async function Home() {
-  const btcSignal = await getBtcSignal()
+export default function CryptoTicker() {
+  const [prices, setPrices]   = useState({})
+  const [loading, setLoading] = useState(true)
+  const trackRef = useRef(null)
 
-  const stateColor = (state) =>
-    state?.includes('LONG') ? '#22c55e' : state?.includes('SHORT') ? '#ef4444' : '#9ca3af'
+  const fetchPrices = async () => {
+    try {
+      const ids = COINS.map(c => c.id).join(',')
+      const res = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
+        { cache: 'no-store' }
+      )
+      const data = await res.json()
+      setPrices(data)
+      setLoading(false)
+    } catch {}
+  }
 
-  const fmt2 = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}`)
+  useEffect(() => {
+    fetchPrices()
+    const iv = setInterval(fetchPrices, 60000)
+    return () => clearInterval(iv)
+  }, [])
+
+  const items = COINS.filter(c => prices[c.id]).map(c => ({
+    ...c,
+    price:  prices[c.id]?.usd ?? 0,
+    change: prices[c.id]?.usd_24h_change ?? 0,
+  }))
+
+  // Duplicate for seamless loop
+  const display = [...items, ...items]
 
   return (
-    <div className="min-h-screen">
-      <Nav />
-      <main className="px-6 py-10 max-w-5xl mx-auto">
+    <div className="w-full bg-[#060606] border-b border-[#111] overflow-hidden relative h-9 flex items-center">
+      {/* fade edges */}
+      <div className="absolute left-0 top-0 bottom-0 w-12 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(to right, #060606, transparent)' }} />
+      <div className="absolute right-0 top-0 bottom-0 w-12 z-10 pointer-events-none"
+        style={{ background: 'linear-gradient(to left, #060606, transparent)' }} />
 
-        <div className="mb-10">
-          <div className="text-[10px] text-[#333] tracking-widest mb-1">COMMAND CENTER</div>
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <h1 className="text-2xl tracking-widest text-[#e8e8e8]">
-              ARPI <span style={{ color: '#f7931a' }}>OS</span>
-            </h1>
-
-            {btcSignal ? (
-              <div
-                className="flex items-center gap-3 font-mono text-xs px-3 py-1.5 rounded border"
-                style={{
-                  borderColor: stateColor(btcSignal.state),
-                  color: '#e8e8e8',
-                  background: 'rgba(0,0,0,0.4)',
-                }}
-              >
-                <span className="text-gray-500">ORPI1</span>
-                <span
-                  className="font-bold px-1.5 py-0.5 rounded text-black"
-                  style={{ background: stateColor(btcSignal.state) }}
-                >
-                  {btcSignal.state}
-                </span>
-                <span>
-                  TPI <span style={{ color: stateColor(btcSignal.state) }}>{fmt2(btcSignal.tpi)}</span>
-                </span>
-                <span>
-                  RoC <span style={{ color: (btcSignal.roc ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{fmt2(btcSignal.roc)}</span>
-                </span>
-              </div>
-            ) : (
-              <div className="font-mono text-xs text-gray-700 px-3 py-1.5 rounded border border-gray-800">
-                ORPI1 — awaiting first signal
-              </div>
-            )}
-          </div>
+      {loading ? (
+        <div className="text-[10px] text-[#333] tracking-widest px-5">LOADING MARKETS...</div>
+      ) : (
+        <div className="ticker-track flex" ref={trackRef}>
+          {display.map((coin, i) => (
+            <TickerItem key={`${coin.id}-${i}`} symbol={coin.symbol} price={coin.price} change={coin.change} />
+          ))}
         </div>
+      )}
 
-        <MarketsOverview />
-        <BtcComparison />
-        <FearGreed />
-        <FundingRate />
-        <LongShortRatio />
-
-        <div className="mt-10">
-          <div className="text-[10px] text-[#333] tracking-widest mb-4">TRADING SIGNALS</div>
-          <TvSignals />
-          <div className="mt-4">
-            <RotationChart />
-          </div>
-        </div>
-
-        <DecisionChecklist />
-        <ChecklistBacktest />
-      </main>
+      <style>{`
+        .ticker-track {
+          animation: ticker-scroll 60s linear infinite;
+        }
+        .ticker-track:hover {
+          animation-play-state: paused;
+        }
+        @keyframes ticker-scroll {
+          0%   { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+      `}</style>
     </div>
   )
 }
