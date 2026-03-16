@@ -41,8 +41,46 @@ function TpiGauge({ tpi }) {
   )
 }
 
-// ─── BTC Price Chart (coloured by TPI state) ──────────────────────
-function BtcPriceChart({ history }) {
+// ─── Hardcoded daily equity (2025-03-17 onward, normalized to 1.0) ─
+// Sourced from full TV strategy CSV (80 trades, 2018-01-01 to present)
+// Linear interpolation between trade entry/exit prices per day
+// T80 (SHORT from $88,341.87 on 2026-01-20) live endpoint appended dynamically
+const EQUITY_DAILY = [["2025-03-17", 1.0], ["2025-03-18", 1.00154], ["2025-03-19", 1.00308], ["2025-03-20", 1.00462], ["2025-03-21", 1.00616], ["2025-03-22", 1.00771], ["2025-03-23", 1.00925], ["2025-03-24", 1.01079], ["2025-03-25", 1.01233], ["2025-03-26", 1.01387], ["2025-03-27", 1.01541], ["2025-03-28", 1.01695], ["2025-03-29", 1.01849], ["2025-03-30", 1.02003], ["2025-03-31", 1.02157], ["2025-04-01", 1.02312], ["2025-04-02", 1.02466], ["2025-04-03", 1.0262], ["2025-04-04", 1.02774], ["2025-04-05", 1.02928], ["2025-04-06", 1.03082], ["2025-04-07", 1.03236], ["2025-04-08", 1.0339], ["2025-04-09", 1.03544], ["2025-04-10", 1.03699], ["2025-04-11", 1.03853], ["2025-04-12", 1.04007], ["2025-04-13", 1.04161], ["2025-04-14", 1.04315], ["2025-04-15", 1.04469], ["2025-04-16", 1.04623], ["2025-04-17", 1.04777], ["2025-04-18", 1.04931], ["2025-04-19", 1.05086], ["2025-04-20", 1.0524], ["2025-04-21", 1.05394], ["2025-04-22", 1.05756], ["2025-04-23", 1.06118], ["2025-04-24", 1.0648], ["2025-04-25", 1.06843], ["2025-04-26", 1.07205], ["2025-04-27", 1.07567], ["2025-04-28", 1.07929], ["2025-04-29", 1.08292], ["2025-04-30", 1.08654], ["2025-05-01", 1.09016], ["2025-05-02", 1.09378], ["2025-05-03", 1.0974], ["2025-05-04", 1.10103], ["2025-05-05", 1.10465], ["2025-05-06", 1.10827], ["2025-05-07", 1.11189], ["2025-05-08", 1.11552], ["2025-05-09", 1.11914], ["2025-05-10", 1.12276], ["2025-05-11", 1.12638], ["2025-05-12", 1.13], ["2025-05-13", 1.13363], ["2025-05-14", 1.13725], ["2025-05-15", 1.14087], ["2025-05-16", 1.14449], ["2025-05-17", 1.14812], ["2025-05-18", 1.15174], ["2025-05-19", 1.15536], ["2025-05-20", 1.15898], ["2025-05-21", 1.1626], ["2025-05-22", 1.16623], ["2025-05-23", 1.16985], ["2025-05-24", 1.17347], ["2025-05-25", 1.17709], ["2025-05-26", 1.18071], ["2025-05-27", 1.18434], ["2025-05-28", 1.18796], ["2025-05-29", 1.19158], ["2025-05-30", 1.1952], ["2025-05-31", 1.19883], ["2025-06-01", 1.20245], ["2025-06-02", 1.20607], ["2025-06-03", 1.20969], ["2025-06-04", 1.21331], ["2025-06-05", 1.21694], ["2025-06-06", 1.22056], ["2025-06-07", 1.22418], ["2025-06-08", 1.2278], ["2025-06-09", 1.23143], ["2025-06-10", 1.23505], ["2025-06-11", 1.23867], ["2025-06-12", 1.24229], ["2025-06-13", 1.24591], ["2025-06-14", 1.24954], ["2025-06-15", 1.25316], ["2025-06-16", 1.25678], ["2025-06-17", 1.2604], ["2025-06-18", 1.25664], ["2025-06-19", 1.25288], ["2025-06-20", 1.24912], ["2025-06-21", 1.24536], ["2025-06-22", 1.2416], ["2025-06-23", 1.23784], ["2025-06-24", 1.23408], ["2025-06-25", 1.23032], ["2025-06-26", 1.22656], ["2025-06-27", 1.2228], ["2025-06-28", 1.21904], ["2025-06-29", 1.21528], ["2025-06-30", 1.20058], ["2025-07-01", 1.18587], ["2025-07-02", 1.15065], ["2025-07-03", 1.15232], ["2025-07-04", 1.15398], ["2025-07-05", 1.15565], ["2025-07-06", 1.15731], ["2025-07-07", 1.15897], ["2025-07-08", 1.16064], ["2025-07-09", 1.1623], ["2025-07-10", 1.16397], ["2025-07-11", 1.16563], ["2025-07-12", 1.1673], ["2025-07-13", 1.16896], ["2025-07-14", 1.17063], ["2025-07-15", 1.17229], ["2025-07-16", 1.17396], ["2025-07-17", 1.17562], ["2025-07-18", 1.17729], ["2025-07-19", 1.17895], ["2025-07-20", 1.18062], ["2025-07-21", 1.18228], ["2025-07-22", 1.18395], ["2025-07-23", 1.18561], ["2025-07-24", 1.18728], ["2025-07-25", 1.18894], ["2025-07-26", 1.19061], ["2025-07-27", 1.19227], ["2025-07-28", 1.19394], ["2025-07-29", 1.1956], ["2025-07-30", 1.19726], ["2025-07-31", 1.19893], ["2025-08-01", 1.20059], ["2025-08-02", 1.20226], ["2025-08-03", 1.20392], ["2025-08-04", 1.20559], ["2025-08-05", 1.20725], ["2025-08-06", 1.20892], ["2025-08-07", 1.21058], ["2025-08-08", 1.21225], ["2025-08-09", 1.21391], ["2025-08-10", 1.21558], ["2025-08-11", 1.21724], ["2025-08-12", 1.21891], ["2025-08-13", 1.22057], ["2025-08-14", 1.22224], ["2025-08-15", 1.2239], ["2025-08-16", 1.22557], ["2025-08-17", 1.22723], ["2025-08-18", 1.2289], ["2025-08-19", 1.22871], ["2025-08-20", 1.22852], ["2025-08-21", 1.22834], ["2025-08-22", 1.22815], ["2025-08-23", 1.22796], ["2025-08-24", 1.22778], ["2025-08-25", 1.22759], ["2025-08-26", 1.2274], ["2025-08-27", 1.22722], ["2025-08-28", 1.22703], ["2025-08-29", 1.22684], ["2025-08-30", 1.22666], ["2025-08-31", 1.22647], ["2025-09-01", 1.22629], ["2025-09-02", 1.2261], ["2025-09-03", 1.22591], ["2025-09-04", 1.22573], ["2025-09-05", 1.22554], ["2025-09-06", 1.22535], ["2025-09-07", 1.22517], ["2025-09-08", 1.22498], ["2025-09-09", 1.22479], ["2025-09-10", 1.22461], ["2025-09-11", 1.22442], ["2025-09-12", 1.22423], ["2025-09-13", 1.22405], ["2025-09-14", 1.22386], ["2025-09-15", 1.22367], ["2025-09-16", 1.22349], ["2025-09-17", 1.21965], ["2025-09-18", 1.21582], ["2025-09-19", 1.21199], ["2025-09-20", 1.20944], ["2025-09-21", 1.2069], ["2025-09-22", 1.20435], ["2025-09-23", 1.20181], ["2025-09-24", 1.19926], ["2025-09-25", 1.19672], ["2025-09-26", 1.19417], ["2025-09-27", 1.19163], ["2025-09-28", 1.18908], ["2025-09-29", 1.18654], ["2025-09-30", 1.18399], ["2025-10-01", 1.18145], ["2025-10-02", 1.17522], ["2025-10-03", 1.169], ["2025-10-04", 1.16278], ["2025-10-05", 1.15656], ["2025-10-06", 1.15033], ["2025-10-07", 1.14411], ["2025-10-08", 1.13789], ["2025-10-09", 1.13167], ["2025-10-10", 1.12544], ["2025-10-11", 1.12764], ["2025-10-12", 1.12983], ["2025-10-13", 1.13203], ["2025-10-14", 1.13422], ["2025-10-15", 1.13641], ["2025-10-16", 1.13861], ["2025-10-17", 1.1408], ["2025-10-18", 1.143], ["2025-10-19", 1.14519], ["2025-10-20", 1.14738], ["2025-10-21", 1.14958], ["2025-10-22", 1.15177], ["2025-10-23", 1.15397], ["2025-10-24", 1.15616], ["2025-10-25", 1.15835], ["2025-10-26", 1.16055], ["2025-10-27", 1.16274], ["2025-10-28", 1.16494], ["2025-10-29", 1.16713], ["2025-10-30", 1.16932], ["2025-10-31", 1.17152], ["2025-11-01", 1.17371], ["2025-11-02", 1.17591], ["2025-11-03", 1.1781], ["2025-11-04", 1.18029], ["2025-11-05", 1.18249], ["2025-11-06", 1.18468], ["2025-11-07", 1.18688], ["2025-11-08", 1.18907], ["2025-11-09", 1.19126], ["2025-11-10", 1.19346], ["2025-11-11", 1.19565], ["2025-11-12", 1.19785], ["2025-11-13", 1.20004], ["2025-11-14", 1.20223], ["2025-11-15", 1.20443], ["2025-11-16", 1.20662], ["2025-11-17", 1.20882], ["2025-11-18", 1.21101], ["2025-11-19", 1.2132], ["2025-11-20", 1.2154], ["2025-11-21", 1.21759], ["2025-11-22", 1.21979], ["2025-11-23", 1.22198], ["2025-11-24", 1.22417], ["2025-11-25", 1.22637], ["2025-11-26", 1.22856], ["2025-11-27", 1.23076], ["2025-11-28", 1.23295], ["2025-11-29", 1.23514], ["2025-11-30", 1.23734], ["2025-12-01", 1.23953], ["2025-12-02", 1.24173], ["2025-12-03", 1.24392], ["2025-12-04", 1.24611], ["2025-12-05", 1.24831], ["2025-12-06", 1.2505], ["2025-12-07", 1.2527], ["2025-12-08", 1.25489], ["2025-12-09", 1.25708], ["2025-12-10", 1.25928], ["2025-12-11", 1.26147], ["2025-12-12", 1.26366], ["2025-12-13", 1.26586], ["2025-12-14", 1.26805], ["2025-12-15", 1.27025], ["2025-12-16", 1.27244], ["2025-12-17", 1.27463], ["2025-12-18", 1.27683], ["2025-12-19", 1.27902], ["2025-12-20", 1.28122], ["2025-12-21", 1.28341], ["2025-12-22", 1.2856], ["2025-12-23", 1.2878], ["2025-12-24", 1.28999], ["2025-12-25", 1.29219], ["2025-12-26", 1.29438], ["2025-12-27", 1.29657], ["2025-12-28", 1.29877], ["2025-12-29", 1.30096], ["2025-12-30", 1.30316], ["2025-12-31", 1.30535], ["2026-01-01", 1.30754], ["2026-01-02", 1.30974], ["2026-01-03", 1.31193], ["2026-01-04", 1.31413], ["2026-01-05", 1.31632], ["2026-01-06", 1.30474], ["2026-01-07", 1.29315], ["2026-01-08", 1.28157], ["2026-01-09", 1.26999], ["2026-01-10", 1.26751], ["2026-01-11", 1.26503], ["2026-01-12", 1.26108], ["2026-01-13", 1.25713], ["2026-01-14", 1.25318], ["2026-01-15", 1.24923], ["2026-01-16", 1.24528], ["2026-01-17", 1.24133], ["2026-01-18", 1.23738], ["2026-01-19", 1.23344], ["2026-01-20", 1.22949], ["2026-01-21", 1.23317], ["2026-01-22", 1.23686], ["2026-01-23", 1.24054], ["2026-01-24", 1.24423], ["2026-01-25", 1.24792], ["2026-01-26", 1.2516], ["2026-01-27", 1.25529], ["2026-01-28", 1.25898], ["2026-01-29", 1.26266], ["2026-01-30", 1.26635], ["2026-01-31", 1.27003], ["2026-02-01", 1.27372], ["2026-02-02", 1.27741], ["2026-02-03", 1.28109], ["2026-02-04", 1.28478], ["2026-02-05", 1.28846], ["2026-02-06", 1.29215], ["2026-02-07", 1.29584], ["2026-02-08", 1.29952], ["2026-02-09", 1.30321], ["2026-02-10", 1.3069], ["2026-02-11", 1.31058], ["2026-02-12", 1.31427], ["2026-02-13", 1.31795], ["2026-02-14", 1.32164], ["2026-02-15", 1.32533], ["2026-02-16", 1.32901], ["2026-02-17", 1.3327], ["2026-02-18", 1.33639], ["2026-02-19", 1.34007], ["2026-02-20", 1.34376], ["2026-02-21", 1.34744], ["2026-02-22", 1.35113], ["2026-02-23", 1.35482], ["2026-02-24", 1.3585], ["2026-02-25", 1.36219], ["2026-02-26", 1.36588], ["2026-02-27", 1.36956], ["2026-02-28", 1.37325], ["2026-03-01", 1.37693], ["2026-03-02", 1.38062], ["2026-03-03", 1.38431], ["2026-03-04", 1.38799], ["2026-03-05", 1.39168], ["2026-03-06", 1.39537], ["2026-03-07", 1.39905], ["2026-03-08", 1.40274], ["2026-03-09", 1.40642], ["2026-03-10", 1.41011], ["2026-03-11", 1.4138], ["2026-03-12", 1.41748], ["2026-03-13", 1.42117], ["2026-03-14", 1.42486], ["2026-03-15", 1.42854], ["2026-03-16", 1.43223]]
+
+// Trade exit markers for dots on the curve
+const TRADE_EXITS = [
+  // T66 SHORT exit → LONG entry
+  { date: '2025-04-21', equity: null },
+  // T67 LONG exit → SHORT entry
+  { date: '2025-06-17', equity: null },
+  // T68 SHORT exit → LONG entry
+  { date: '2025-06-29', equity: null },
+  // T69 LONG exit → SHORT entry
+  { date: '2025-07-01', equity: null },
+  // T70 SHORT exit → LONG entry
+  { date: '2025-07-02', equity: null },
+  // T71 LONG exit → SHORT entry
+  { date: '2025-08-18', equity: null },
+  // T72 SHORT exit → LONG entry
+  { date: '2025-09-16', equity: null },
+  // T73 LONG exit → SHORT entry
+  { date: '2025-09-19', equity: null },
+  // T74 SHORT exit → LONG entry
+  { date: '2025-10-01', equity: null },
+  // T75 LONG exit → SHORT entry
+  { date: '2025-10-10', equity: null },
+  // T76 SHORT exit → LONG entry
+  { date: '2026-01-05', equity: null },
+  // T77 LONG exit → SHORT entry
+  { date: '2026-01-09', equity: null },
+  // T78 SHORT exit → LONG entry
+  { date: '2026-01-11', equity: null },
+  // T79 LONG exit → SHORT entry (T80 open)
+  { date: '2026-01-20', equity: null },
+]
+
+// ─── Combined BTC Price + Equity Curve (shared x-axis) ────────────
+function CombinedChart({ history, liveBtcPrice }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -56,218 +94,167 @@ function BtcPriceChart({ history }) {
     canvas.height = H * dpr
     ctx.scale(dpr, dpr)
 
-    // history is newest-first → reverse for chart
-    const pts = [...history].reverse().filter((d) => d.price > 0)
-    if (pts.length < 2) return
+    // BTC price pts (newest-first → reverse)
+    const btcPts = [...history].reverse().filter(d => d.price > 0)
+    if (btcPts.length < 2) return
 
-    const prices = pts.map((d) => d.price)
-    const minP = Math.min(...prices)
-    const maxP = Math.max(...prices)
-    const range = maxP - minP || 1
-    const pad = { t: 12, r: 8, b: 24, l: 60 }
+    // Build equity array aligned to same date range as btcPts
+    // EQUITY_DAILY is [date, equity] pairs sorted ascending
+    const equityMap = Object.fromEntries(EQUITY_DAILY)
+
+    // Append live endpoint: T80 is SHORT from $88,341.87
+    // liveEquity = lastKnownEquity * (88341.87 / currentPrice)
+    const T80_ENTRY_PRICE = 88341.87
+    if (liveBtcPrice > 0) {
+      const lastKnown = EQUITY_DAILY[EQUITY_DAILY.length - 1][1]
+      const liveEquity = lastKnown * (T80_ENTRY_PRICE / liveBtcPrice)
+      const today = new Date().toISOString().slice(0, 10)
+      equityMap[today] = liveEquity
+    }
+
+    // Map each BTC point to its equity value by date
+    const equityPts = btcPts.map(p => {
+      const dateStr = new Date(p.ts).toISOString().slice(0, 10)
+      return equityMap[dateStr] ?? null
+    })
+
+    // Fill nulls by interpolation
+    for (let i = 0; i < equityPts.length; i++) {
+      if (equityPts[i] === null) {
+        // find nearest non-null neighbours
+        let prev = null, next = null
+        for (let j = i - 1; j >= 0; j--) if (equityPts[j] !== null) { prev = { i: j, v: equityPts[j] }; break }
+        for (let j = i + 1; j < equityPts.length; j++) if (equityPts[j] !== null) { next = { i: j, v: equityPts[j] }; break }
+        if (prev && next) equityPts[i] = prev.v + (next.v - prev.v) * (i - prev.i) / (next.i - prev.i)
+        else if (prev) equityPts[i] = prev.v
+        else if (next) equityPts[i] = next.v
+        else equityPts[i] = 1.0
+      }
+    }
+
+    const validEquity = equityPts.filter(v => v !== null)
+    if (validEquity.length === 0) return
+
+    // Layout: top 60% = BTC price, bottom 40% = equity curve
+    // Shared x-axis
+    const pad = { t: 8, r: 52, b: 20, l: 60 }
+    const splitY = Math.floor(H * 0.58) // divider between charts
     const cw = W - pad.l - pad.r
-    const ch = H - pad.t - pad.b
+    const priceCh = splitY - pad.t - 4   // price chart height
+    const equityCh = H - splitY - pad.b  // equity chart height
 
     ctx.clearRect(0, 0, W, H)
 
-    // y-axis labels
-    ctx.fillStyle = '#6b7280'
-    ctx.font = '10px monospace'
-    ctx.textAlign = 'right'
-    for (let i = 0; i <= 4; i++) {
-      const v = minP + (range * i) / 4
-      const y = pad.t + ch - (ch * i) / 4
+    // ── BTC Price chart (top) ──
+    const prices = btcPts.map(d => d.price)
+    const minP = Math.min(...prices), maxP = Math.max(...prices)
+    const rangeP = maxP - minP || 1
+
+    const pX = (i) => pad.l + (cw * i) / (btcPts.length - 1)
+    const pY = (price) => pad.t + priceCh - (priceCh * (price - minP)) / rangeP
+
+    // Price grid
+    ctx.font = '9px monospace'; ctx.textAlign = 'right'
+    for (let i = 0; i <= 3; i++) {
+      const v = minP + (rangeP * i) / 3
+      const y = pad.t + priceCh - (priceCh * i) / 3
+      ctx.fillStyle = '#4b5563'
       ctx.fillText(`$${Math.round(v / 1000)}k`, pad.l - 4, y + 3)
-      ctx.strokeStyle = '#1f2937'
-      ctx.lineWidth = 0.5
+      ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 0.5
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
+    }
+
+    // Price line (state-coloured)
+    ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
+    for (let i = 1; i < btcPts.length; i++) {
+      ctx.strokeStyle = stateColor(btcPts[i].state)
       ctx.beginPath()
-      ctx.moveTo(pad.l, y)
-      ctx.lineTo(pad.l + cw, y)
+      ctx.moveTo(pX(i - 1), pY(btcPts[i - 1].price))
+      ctx.lineTo(pX(i), pY(btcPts[i].price))
       ctx.stroke()
     }
 
-    // draw coloured line segments
-    ctx.lineWidth = 1.5
-    ctx.lineJoin = 'round'
-    for (let i = 1; i < pts.length; i++) {
-      const x1 = pad.l + (cw * (i - 1)) / (pts.length - 1)
-      const y1 = pad.t + ch - (ch * (pts[i - 1].price - minP)) / range
-      const x2 = pad.l + (cw * i) / (pts.length - 1)
-      const y2 = pad.t + ch - (ch * (pts[i].price - minP)) / range
+    // Divider
+    ctx.strokeStyle = '#374151'; ctx.lineWidth = 1
+    ctx.setLineDash([3, 3])
+    ctx.beginPath(); ctx.moveTo(pad.l, splitY); ctx.lineTo(pad.l + cw, splitY); ctx.stroke()
+    ctx.setLineDash([])
 
-      const col = stateColor(pts[i].state)
-      ctx.strokeStyle = col
-      ctx.beginPath()
-      ctx.moveTo(x1, y1)
-      ctx.lineTo(x2, y2)
-      ctx.stroke()
+    // ── Equity curve (bottom) ──
+    const minE = Math.min(...validEquity), maxE = Math.max(...validEquity)
+    const rangeE = maxE - minE || 0.01
+
+    const eX = (i) => pad.l + (cw * i) / (equityPts.length - 1)
+    const eY = (v) => splitY + 4 + equityCh - (equityCh * (v - minE)) / rangeE
+
+    // 1.0 baseline
+    const baselineY = eY(Math.max(minE, Math.min(maxE, 1.0)))
+    ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5
+    ctx.setLineDash([3, 3])
+    ctx.beginPath(); ctx.moveTo(pad.l, baselineY); ctx.lineTo(pad.l + cw, baselineY); ctx.stroke()
+    ctx.setLineDash([])
+
+    // Equity grid + right y-axis labels
+    ctx.font = '9px monospace'; ctx.textAlign = 'left'
+    for (let i = 0; i <= 3; i++) {
+      const v = minE + (rangeE * i) / 3
+      const y = splitY + 4 + equityCh - (equityCh * i) / 3
+      ctx.fillStyle = '#4b5563'
+      ctx.fillText(`${v.toFixed(2)}x`, pad.l + cw + 4, y + 3)
     }
 
-    // x-axis: date labels at start / mid / end
-    ctx.fillStyle = '#6b7280'
-    ctx.font = '10px monospace'
-    ctx.textAlign = 'center'
-    const labelIdxs = [0, Math.floor((pts.length - 1) / 2), pts.length - 1]
-    labelIdxs.forEach((i) => {
-      const d = new Date(pts[i].ts)
-      const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
-      const x = pad.l + (cw * i) / (pts.length - 1)
-      ctx.fillText(label, x, H - 4)
+    // Gradient fill under equity curve
+    const grad = ctx.createLinearGradient(0, splitY + 4, 0, H - pad.b)
+    grad.addColorStop(0, 'rgba(129,140,248,0.2)')
+    grad.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.beginPath()
+    equityPts.forEach((v, i) => { i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)) })
+    ctx.lineTo(eX(equityPts.length - 1), H - pad.b)
+    ctx.lineTo(pad.l, H - pad.b)
+    ctx.closePath(); ctx.fillStyle = grad; ctx.fill()
+
+    // Equity line
+    ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
+    for (let i = 1; i < equityPts.length; i++) {
+      const prev = equityPts[i - 1], cur = equityPts[i]
+      ctx.strokeStyle = (prev >= 1.0 && cur >= 1.0) ? '#818cf8'
+        : (prev < 1.0 && cur < 1.0) ? '#f87171' : '#818cf8'
+      ctx.beginPath(); ctx.moveTo(eX(i - 1), eY(prev)); ctx.lineTo(eX(i), eY(cur)); ctx.stroke()
+    }
+
+    // Trade exit dots on equity curve
+    const equityDateMap = Object.fromEntries(EQUITY_DAILY)
+    TRADE_EXITS.forEach(exit => {
+      const idx = btcPts.findIndex(p => new Date(p.ts).toISOString().slice(0, 10) === exit.date)
+      if (idx >= 0 && equityPts[idx] !== null) {
+        const x = eX(idx), y = eY(equityPts[idx])
+        ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+        ctx.fillStyle = equityPts[idx] >= 1.0 ? '#818cf8' : '#f87171'
+        ctx.fill()
+      }
     })
-  }, [history])
+
+    // Final equity value label
+    const lastEq = equityPts[equityPts.length - 1]
+    const lastX = eX(equityPts.length - 1)
+    const lastY = eY(lastEq)
+    ctx.fillStyle = lastEq >= 1.0 ? '#818cf8' : '#f87171'
+    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left'
+    ctx.fillText(`${lastEq.toFixed(3)}x`, lastX + 2, lastY - 2)
+
+    // ── Shared x-axis labels (bottom) ──
+    ctx.fillStyle = '#6b7280'; ctx.font = '9px monospace'; ctx.textAlign = 'center'
+    ;[0, Math.floor((btcPts.length - 1) / 2), btcPts.length - 1].forEach(i => {
+      const d = new Date(btcPts[i].ts)
+      const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
+      ctx.fillText(label, pX(i), H - 4)
+    })
+
+  }, [history, liveBtcPrice])
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="w-full"
-      style={{ height: 160, display: 'block' }}
-    />
+    <canvas ref={canvasRef} className="w-full" style={{ height: 320, display: 'block' }} />
   )
-}
-
-// ─── Trade-accurate equity curve ─────────────────────────────────
-// Ground truth from TV strategy CSV. Step-function: flat during trade,
-// steps at exit. Final point interpolated live from current BTC price.
-//
-// Trade 10 open: SHORT entered $88,341.87 on 2026-01-20
-// At exit the equity steps to: prevEquity * (entryPrice / currentPrice)
-// since shorting profits when price falls.
-const TRADE_EQUITY_PTS = [
-  { date: '2025-08-07', equity: 1.0000 }, // T1 entry (strategy start)
-  { date: '2025-08-18', equity: 0.9896 }, // T1 exit  SHORT entry (-1.04%)
-  { date: '2025-09-16', equity: 0.9956 }, // T2 exit  LONG entry  (-0.44%)
-  { date: '2025-09-19', equity: 0.9906 }, // T3 exit  SHORT entry (-0.94%)
-  { date: '2025-10-01', equity: 0.9748 }, // T4 exit  LONG entry  (-2.52%)
-  { date: '2025-10-10', equity: 0.9526 }, // T5 exit  SHORT entry (-4.74%)
-  { date: '2026-01-05', equity: 1.1696 }, // T6 exit  LONG entry  (+16.96%)
-  { date: '2026-01-09', equity: 0.9648 }, // T7 exit  SHORT entry (-3.52%)
-  { date: '2026-01-11', equity: 0.9961 }, // T8 exit  LONG entry  (-0.39%)
-  { date: '2026-01-20', equity: 0.9719 }, // T9 exit  SHORT entry (-2.81%)
-  // T10: SHORT entered $88,341.87 — open trade, live endpoint added below
-]
-const T10_ENTRY_PRICE = 88341.87
-const T10_ENTRY_EQUITY = 0.9719 // equity at T10 entry
-
-function drawTradeEquityCanvas(canvas, liveBtcPrice) {
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  const dpr = window.devicePixelRatio || 1
-  const W = canvas.clientWidth
-  const H = canvas.clientHeight
-  canvas.width = W * dpr
-  canvas.height = H * dpr
-  ctx.scale(dpr, dpr)
-
-  // Build final pts array: hardcoded + live endpoint
-  const pts = [...TRADE_EQUITY_PTS]
-  if (liveBtcPrice > 0) {
-    // T10 is SHORT: profit = entry/current - 1
-    const liveEquity = T10_ENTRY_EQUITY * (T10_ENTRY_PRICE / liveBtcPrice)
-    pts.push({ date: new Date().toISOString().slice(0, 10), equity: liveEquity })
-  }
-
-  const equityVals = pts.map(p => p.equity)
-  const minE = Math.min(...equityVals)
-  const maxE = Math.max(...equityVals)
-  const range = maxE - minE || 0.01
-  const pad = { t: 12, r: 46, b: 24, l: 52 }
-  const cw = W - pad.l - pad.r
-  const ch = H - pad.t - pad.b
-
-  ctx.clearRect(0, 0, W, H)
-
-  // 1.0 baseline
-  const baseY = pad.t + ch - (ch * (1.0 - minE)) / range
-  ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5
-  ctx.setLineDash([4, 4])
-  ctx.beginPath(); ctx.moveTo(pad.l, baseY); ctx.lineTo(pad.l + cw, baseY); ctx.stroke()
-  ctx.setLineDash([])
-
-  // Convert date string to x position
-  const startTs = new Date(pts[0].date).getTime()
-  const endTs = new Date(pts[pts.length - 1].date).getTime()
-  const totalMs = endTs - startTs || 1
-  const dateX = (dateStr) => pad.l + (cw * (new Date(dateStr).getTime() - startTs)) / totalMs
-
-  // Grid + y-axis labels
-  ctx.font = '10px monospace'; ctx.textAlign = 'right'
-  for (let i = 0; i <= 4; i++) {
-    const v = minE + (range * i) / 4
-    const y = pad.t + ch - (ch * i) / 4
-    ctx.fillStyle = '#6b7280'
-    ctx.fillText(`${v.toFixed(2)}x`, pad.l - 4, y + 3)
-    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 0.5
-    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
-  }
-
-  // Colour regions: green when equity rising (SHORT profitable), red when falling
-  // Draw gradient fill
-  const lastPt = pts[pts.length - 1]
-  const lastEq = lastPt.equity
-  const fillColor = lastEq >= T10_ENTRY_EQUITY ? 'rgba(129,140,248,0.15)' : 'rgba(239,68,68,0.1)'
-  const lineColor = lastEq >= 1.0 ? '#818cf8' : '#f87171'
-
-  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch)
-  grad.addColorStop(0, lastEq >= 1.0 ? 'rgba(129,140,248,0.25)' : 'rgba(239,68,68,0.15)')
-  grad.addColorStop(1, 'rgba(0,0,0,0)')
-
-  ctx.beginPath()
-  pts.forEach((p, i) => {
-    const x = dateX(p.date)
-    const y = pad.t + ch - (ch * (p.equity - minE)) / range
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-  })
-  ctx.lineTo(dateX(lastPt.date), pad.t + ch)
-  ctx.lineTo(pad.l, pad.t + ch)
-  ctx.closePath(); ctx.fillStyle = grad; ctx.fill()
-
-  // Equity line — colour segment by whether above/below 1.0
-  ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
-  pts.forEach((p, i) => {
-    if (i === 0) return
-    const prev = pts[i - 1]
-    ctx.strokeStyle = prev.equity >= 1.0 && p.equity >= 1.0 ? '#818cf8'
-      : prev.equity < 1.0 && p.equity < 1.0 ? '#f87171'
-      : '#818cf8'
-    ctx.beginPath()
-    ctx.moveTo(dateX(prev.date), pad.t + ch - (ch * (prev.equity - minE)) / range)
-    ctx.lineTo(dateX(p.date), pad.t + ch - (ch * (p.equity - minE)) / range)
-    ctx.stroke()
-  })
-
-  // Trade exit dots
-  TRADE_EQUITY_PTS.slice(1).forEach(p => {
-    const x = dateX(p.date)
-    const y = pad.t + ch - (ch * (p.equity - minE)) / range
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2)
-    ctx.fillStyle = p.equity >= 1.0 ? '#818cf8' : '#f87171'
-    ctx.fill()
-  })
-
-  // Final value label
-  const finalX = dateX(lastPt.date)
-  const finalY = pad.t + ch - (ch * (lastEq - minE)) / range
-  const finalColor = lastEq >= 1.0 ? '#818cf8' : '#f87171'
-  ctx.fillStyle = finalColor; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left'
-  ctx.fillText(`${lastEq.toFixed(4)}x`, finalX + 4, finalY + 4)
-
-  // X-axis: start, mid, end
-  ctx.fillStyle = '#6b7280'; ctx.font = '10px monospace'; ctx.textAlign = 'center'
-  ;[pts[0], pts[Math.floor(pts.length / 2)], lastPt].forEach(p => {
-    const d = new Date(p.date)
-    const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
-    ctx.fillText(label, dateX(p.date), H - 4)
-  })
-}
-
-// ─── Long/Short Equity Curve (TV-accurate) ────────────────────────
-function EquityCurveLongShort({ btcSignal }) {
-  const canvasRef = useRef(null)
-  const liveBtcPrice = btcSignal?.price || 0
-  useEffect(() => {
-    drawTradeEquityCanvas(canvasRef.current, liveBtcPrice)
-  }, [liveBtcPrice])
-  return <canvas ref={canvasRef} className="w-full" style={{ height: 180, display: 'block' }} />
 }
 
 // ─── Rotation Badge ───────────────────────────────────────────────
@@ -463,48 +450,25 @@ export default function TvSignals() {
         </div>
       </div>
 
-      {/* ── BTC Price Chart ── */}
+      {/* ── BTC Price + ORPI1 Equity Curve (shared x-axis) ── */}
       {btcHistory.length > 1 && (
         <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
-            BTC Price — coloured by TPI state
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-500 uppercase tracking-wider">
+              BTC Price + ORPI1 Equity Curve
+            </div>
+            <div className="flex gap-3 text-xs text-gray-600">
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-400 rounded" /> Long</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-red-400 rounded" /> Short</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-indigo-400 rounded" /> Equity</span>
+            </div>
           </div>
-          <BtcPriceChart history={btcHistory} />
-          <div className="flex gap-4 mt-2 text-xs text-gray-600">
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-1 bg-green-400 rounded" /> Long
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-1 bg-gray-400 rounded" /> Neutral
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-1 bg-red-400 rounded" /> Short
-            </span>
+          <CombinedChart history={btcHistory} liveBtcPrice={btc?.price || 0} />
+          <div className="text-xs text-gray-700 mt-2">
+            Equity normalized to 1.0 at chart start · 80 trades since 2018 · dots = signal changes · live endpoint interpolated from current BTC price
           </div>
         </div>
       )}
-
-      {/* ── ORPI1 Equity Curve (TV-accurate, trade-by-trade) ── */}
-      <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-          ORPI1 Equity Curve — Long / Short
-        </div>
-        <div className="text-xs text-gray-600 mb-3">
-          Trade-accurate · sourced from TV strategy CSV · live endpoint from current BTC price · starts Aug 7 2025
-        </div>
-        <EquityCurveLongShort btcSignal={btc} />
-        <div className="flex gap-4 mt-2 text-xs text-gray-600">
-          <span className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-indigo-400" /> Above 1.0x
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-red-400" /> Below 1.0x
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-gray-500" /> Exit dots
-          </span>
-        </div>
-      </div>
 
       {/* Empty state charts */}
       {btcHistory.length <= 1 && !loading && (
