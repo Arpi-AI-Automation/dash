@@ -4,11 +4,10 @@ import SectionHeader from './SectionHeader'
 
 // ALL Bybit endpoints are Vercel IP blocked — fetch everything client-side
 async function fetchClientData() {
-  const [tickerRes, oiRes, takerRes, lsRes] = await Promise.allSettled([
+  const [tickerRes, oiRes, takerRes] = await Promise.allSettled([
     fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT'),
     fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=2'),
     fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1d&limit=1'),
-    fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1h&limit=1'),
   ])
 
   let fundingRate = null, oiUsd = null, price24hPcnt = null
@@ -39,14 +38,7 @@ async function fetchClientData() {
     if (row) takerBuyRatio = parseFloat(row.buyRatio) * 100
   }
 
-  let lsLongRatio = null
-  if (lsRes.status === 'fulfilled') {
-    const d = await lsRes.value.json()
-    const row = d.result?.list?.[0]
-    if (row) lsLongRatio = parseFloat(row.buyRatio) * 100
-  }
-
-  return { fundingRate, oiUsd, price24hPcnt, oiPrev, oiCurr, takerBuyRatio, lsLongRatio }
+  return { fundingRate, oiUsd, price24hPcnt, oiPrev, oiCurr, takerBuyRatio }
 }
 
 function ConditionRow({ label, pass, value, detail }) {
@@ -148,7 +140,7 @@ export default function DecisionChecklist() {
 
   const fetchData = useCallback(async () => {
     try {
-      const { fundingRate, oiUsd, price24hPcnt, oiPrev, oiCurr, takerBuyRatio, lsLongRatio } = await fetchClientData()
+      const { fundingRate, oiUsd, price24hPcnt, oiPrev, oiCurr, takerBuyRatio } = await fetchClientData()
       const params = new URLSearchParams()
       if (fundingRate   !== null) params.set('fundingRate',   fundingRate.toFixed(8))
       if (oiUsd         !== null) params.set('oiUsd',         oiUsd.toFixed(2))
@@ -156,7 +148,6 @@ export default function DecisionChecklist() {
       if (oiPrev        !== null) params.set('oiPrev',        oiPrev.toFixed(2))
       if (oiCurr        !== null) params.set('oiCurr',        oiCurr.toFixed(2))
       if (takerBuyRatio !== null) params.set('takerBuyRatio', takerBuyRatio.toFixed(4))
-      if (lsLongRatio   !== null) params.set('lsLongRatio',   lsLongRatio.toFixed(4))
 
       const res  = await fetch(`/api/checklist?${params}`, { cache: 'no-store' })
       const json = await res.json()
