@@ -6,19 +6,15 @@ const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'Arpi-vypi-2026-btc'
 
 async function redisSet(key, value) {
-  // Use query param to set string value directly — avoids double-stringify
   const encoded = encodeURIComponent(JSON.stringify(value))
   const res = await fetch(`${REDIS_URL}/set/${key}/${encoded}`, {
     method: 'GET',
-    headers: {
-      Authorization: `Bearer ${REDIS_TOKEN}`,
-    },
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
   })
   return res.json()
 }
 
 async function redisPush(key, value) {
-  // Push to a list (for history), keep last 365 entries
   const res = await fetch(`${REDIS_URL}/lpush/${key}`, {
     method: 'POST',
     headers: {
@@ -28,8 +24,6 @@ async function redisPush(key, value) {
     body: JSON.stringify(JSON.stringify(value)),
   })
   await res.json()
-
-  // Trim to last 365 entries
   await fetch(`${REDIS_URL}/ltrim/${key}/0/364`, {
     method: 'POST',
     headers: {
@@ -42,8 +36,9 @@ async function redisPush(key, value) {
 
 export async function POST(request) {
   try {
-    // Validate secret
-    const secret = request.headers.get('x-webhook-secret')
+    // TradingView doesn't support custom headers — accept secret in URL or header
+    const { searchParams } = new URL(request.url)
+    const secret = searchParams.get('secret') || request.headers.get('x-webhook-secret')
     if (secret !== WEBHOOK_SECRET) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -58,7 +53,6 @@ export async function POST(request) {
     const timestamp = ts || Date.now()
 
     if (script === 'btc') {
-      // Validate required fields
       if (!state || tpi === undefined) {
         return Response.json({ error: 'Missing required BTC fields' }, { status: 400 })
       }
@@ -73,10 +67,7 @@ export async function POST(request) {
         updated_at: new Date().toISOString(),
       }
 
-      // Store current signal
-      await redisSet('signal:btc', JSON.stringify(signal))
-
-      // Store in history list for equity curve
+      await redisSet('signal:btc', signal)
       await redisPush('history:btc', {
         state: signal.state,
         tpi: signal.tpi,
@@ -96,9 +87,7 @@ export async function POST(request) {
         updated_at: new Date().toISOString(),
       }
 
-      await redisSet('signal:rotation', JSON.stringify(signal))
-
-      // Store rotation history
+      await redisSet('signal:rotation', signal)
       await redisPush('history:rotation', {
         asset: signal.asset,
         prev_asset: signal.prev_asset,
@@ -115,7 +104,6 @@ export async function POST(request) {
   }
 }
 
-// Health check
 export async function GET() {
   return Response.json({ ok: true, endpoint: 'webhook', ts: Date.now() })
 }
