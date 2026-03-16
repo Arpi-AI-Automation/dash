@@ -125,31 +125,33 @@ function CombinedChart({ history }) {
     // where day[j] is the NEXT transition day.
 
     // Build trade segments: [{entryIdx, exitIdx, entryPrice, exitPrice, state}]
+    // Rule: a segment runs from day[segStart] to day[i-1] when state changes on day[i].
+    // The final segment always runs to the last day.
+    // entryPrice = price of first day in segment (signal fired at that close, we enter)
+    // exitPrice  = price of first day of NEXT segment (that's when we exit and re-enter)
     const segments = []
     let segStart = 0
     for (let i = 1; i < btcPts.length; i++) {
-      const isLast = i === btcPts.length - 1
-      if (btcPts[i].state !== btcPts[segStart].state || isLast) {
+      if (btcPts[i].state !== btcPts[segStart].state) {
+        // Segment ends at i-1, but we exit at day[i]'s price (first day of new state)
         segments.push({
           entryIdx:   segStart,
-          exitIdx:    isLast && btcPts[i].state === btcPts[segStart].state ? i : i - 1,
+          exitIdx:    i,                        // display interpolates up to this index
           entryPrice: btcPts[segStart].price,
-          exitPrice:  (isLast && btcPts[i].state === btcPts[segStart].state) ? btcPts[i].price : btcPts[i - 1].price,
+          exitPrice:  btcPts[i].price,          // exit = entry price of next segment
           state:      btcPts[segStart].state,
         })
         segStart = i
       }
     }
-    // Add the final open segment (from last transition to today)
-    if (segStart < btcPts.length - 1) {
-      segments.push({
-        entryIdx:   segStart,
-        exitIdx:    btcPts.length - 1,
-        entryPrice: btcPts[segStart].price,
-        exitPrice:  btcPts[btcPts.length - 1].price,
-        state:      btcPts[segStart].state,
-      })
-    }
+    // Final open segment: entry at last transition, exit at today's price
+    segments.push({
+      entryIdx:   segStart,
+      exitIdx:    btcPts.length - 1,
+      entryPrice: btcPts[segStart].price,
+      exitPrice:  btcPts[btcPts.length - 1].price,
+      state:      btcPts[segStart].state,
+    })
 
     // Build per-point arrays by interpolating equity within each segment
     const eqLSnorm   = new Array(btcPts.length)
