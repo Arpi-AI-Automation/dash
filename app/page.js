@@ -6,6 +6,7 @@ import FundingRate from '../components/FundingRate'
 import LongShortRatio from '../components/LongShortRatio'
 import DecisionChecklist from '../components/DecisionChecklist'
 import TvSignals from '../components/TvSignals'
+import RotationChart from '../components/RotationChart'
 
 // Read Redis directly — avoids self-calling HTTP on Vercel
 async function getBtcSignal() {
@@ -89,6 +90,9 @@ export default async function Home() {
         <div className="mt-10">
           <div className="text-[10px] text-[#333] tracking-widest mb-4">TRADING SIGNALS</div>
           <TvSignals />
+          <div className="mt-4">
+            <RotationChart />
+          </div>
         </div>
 
         <DecisionChecklist />
