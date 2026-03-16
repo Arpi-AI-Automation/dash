@@ -125,132 +125,116 @@ function BtcPriceChart({ history }) {
   )
 }
 
-// ─── Equity Curve ─────────────────────────────────────────────────
-function EquityCurve({ history }) {
+// ─── Shared canvas equity drawer ─────────────────────────────────
+function drawEquityCanvas(canvas, pts, equityFn, lineColor, gradColor) {
+  if (!canvas || pts.length < 2) return
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const W = canvas.clientWidth
+  const H = canvas.clientHeight
+  canvas.width = W * dpr
+  canvas.height = H * dpr
+  ctx.scale(dpr, dpr)
+
+  const equity = [1]
+  for (let i = 1; i < pts.length; i++) {
+    const prev = pts[i - 1], cur = pts[i]
+    const pct = prev.price > 0 ? (cur.price - prev.price) / prev.price : 0
+    equity.push(equity[equity.length - 1] * (1 + equityFn(pct, prev, cur)))
+  }
+
+  const minE = Math.min(...equity)
+  const maxE = Math.max(...equity)
+  const range = maxE - minE || 0.01
+  const pad = { t: 12, r: 36, b: 24, l: 52 }
+  const cw = W - pad.l - pad.r
+  const ch = H - pad.t - pad.b
+
+  ctx.clearRect(0, 0, W, H)
+
+  // baseline
+  const baseY = pad.t + ch - (ch * (1 - minE)) / range
+  ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5
+  ctx.setLineDash([4, 4])
+  ctx.beginPath(); ctx.moveTo(pad.l, baseY); ctx.lineTo(pad.l + cw, baseY); ctx.stroke()
+  ctx.setLineDash([])
+
+  // grid + y-axis labels
+  ctx.font = '10px monospace'; ctx.textAlign = 'right'
+  for (let i = 0; i <= 4; i++) {
+    const v = minE + (range * i) / 4
+    const y = pad.t + ch - (ch * i) / 4
+    ctx.fillStyle = '#6b7280'
+    ctx.fillText(`${v.toFixed(2)}x`, pad.l - 4, y + 3)
+    ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 0.5
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
+  }
+
+  // gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch)
+  grad.addColorStop(0, gradColor); grad.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.beginPath()
+  equity.forEach((v, i) => {
+    const x = pad.l + (cw * i) / (equity.length - 1)
+    const y = pad.t + ch - (ch * (v - minE)) / range
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  })
+  ctx.lineTo(pad.l + cw, pad.t + ch); ctx.lineTo(pad.l, pad.t + ch)
+  ctx.closePath(); ctx.fillStyle = grad; ctx.fill()
+
+  // line
+  ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
+  ctx.beginPath()
+  equity.forEach((v, i) => {
+    const x = pad.l + (cw * i) / (equity.length - 1)
+    const y = pad.t + ch - (ch * (v - minE)) / range
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  })
+  ctx.stroke()
+
+  // final value label
+  const lastVal = equity[equity.length - 1]
+  const lastY = pad.t + ch - (ch * (lastVal - minE)) / range
+  ctx.fillStyle = lineColor; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left'
+  ctx.fillText(`${lastVal.toFixed(2)}x`, pad.l + cw + 3, lastY + 4)
+
+  // x-axis dates
+  ctx.fillStyle = '#6b7280'; ctx.font = '10px monospace'; ctx.textAlign = 'center'
+  ;[0, Math.floor((pts.length - 1) / 2), pts.length - 1].forEach((i) => {
+    const d = new Date(pts[i].ts)
+    const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
+    ctx.fillText(label, pad.l + (cw * i) / (pts.length - 1), H - 4)
+  })
+}
+
+// ─── Long-only Equity Curve ───────────────────────────────────────
+function EquityCurveLongOnly({ history }) {
   const canvasRef = useRef(null)
-
   useEffect(() => {
-    if (!canvasRef.current || !history?.length) return
-    const canvas = canvasRef.current
-    const ctx = canvas.getContext('2d')
-    const dpr = window.devicePixelRatio || 1
-    const W = canvas.clientWidth
-    const H = canvas.clientHeight
-    canvas.width = W * dpr
-    canvas.height = H * dpr
-    ctx.scale(dpr, dpr)
-
-    // Build equity curve from TPI history (newest-first → reverse)
-    const pts = [...history].reverse().filter((d) => d.price > 0)
-    if (pts.length < 2) return
-
-    // Simple equity: long when tpi >= 0, flat otherwise
-    // Track cumulative return using price changes
-    const equity = [1]
-    for (let i = 1; i < pts.length; i++) {
-      const prevPrice = pts[i - 1].price
-      const curPrice = pts[i].price
-      const pctChange = prevPrice > 0 ? (curPrice - prevPrice) / prevPrice : 0
-      const prevTpi = pts[i - 1].tpi ?? 0
-      const ret = prevTpi >= 0 ? pctChange : 0  // only capture return when long
-      equity.push(equity[equity.length - 1] * (1 + ret))
-    }
-
-    const minE = Math.min(...equity)
-    const maxE = Math.max(...equity)
-    const range = maxE - minE || 0.01
-    const pad = { t: 12, r: 8, b: 24, l: 52 }
-    const cw = W - pad.l - pad.r
-    const ch = H - pad.t - pad.b
-
-    ctx.clearRect(0, 0, W, H)
-
-    // baseline at 1x
-    const baseY = pad.t + ch - (ch * (1 - minE)) / range
-    ctx.strokeStyle = '#374151'
-    ctx.lineWidth = 0.5
-    ctx.setLineDash([4, 4])
-    ctx.beginPath()
-    ctx.moveTo(pad.l, baseY)
-    ctx.lineTo(pad.l + cw, baseY)
-    ctx.stroke()
-    ctx.setLineDash([])
-
-    // y-axis
-    ctx.fillStyle = '#6b7280'
-    ctx.font = '10px monospace'
-    ctx.textAlign = 'right'
-    for (let i = 0; i <= 4; i++) {
-      const v = minE + (range * i) / 4
-      const y = pad.t + ch - (ch * i) / 4
-      ctx.fillText(`${v.toFixed(2)}x`, pad.l - 4, y + 3)
-      ctx.strokeStyle = '#1f2937'
-      ctx.lineWidth = 0.5
-      ctx.beginPath()
-      ctx.moveTo(pad.l, y)
-      ctx.lineTo(pad.l + cw, y)
-      ctx.stroke()
-    }
-
-    // gradient fill under curve
-    const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch)
-    grad.addColorStop(0, 'rgba(34,197,94,0.25)')
-    grad.addColorStop(1, 'rgba(34,197,94,0)')
-
-    ctx.beginPath()
-    equity.forEach((v, i) => {
-      const x = pad.l + (cw * i) / (equity.length - 1)
-      const y = pad.t + ch - (ch * (v - minE)) / range
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-    })
-    const lastX = pad.l + cw
-    const bottomY = pad.t + ch
-    ctx.lineTo(lastX, bottomY)
-    ctx.lineTo(pad.l, bottomY)
-    ctx.closePath()
-    ctx.fillStyle = grad
-    ctx.fill()
-
-    // equity line
-    ctx.strokeStyle = '#22c55e'
-    ctx.lineWidth = 1.5
-    ctx.lineJoin = 'round'
-    ctx.beginPath()
-    equity.forEach((v, i) => {
-      const x = pad.l + (cw * i) / (equity.length - 1)
-      const y = pad.t + ch - (ch * (v - minE)) / range
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-    })
-    ctx.stroke()
-
-    // final value label
-    const lastVal = equity[equity.length - 1]
-    const lastY = pad.t + ch - (ch * (lastVal - minE)) / range
-    ctx.fillStyle = '#22c55e'
-    ctx.font = 'bold 11px monospace'
-    ctx.textAlign = 'left'
-    ctx.fillText(`${lastVal.toFixed(2)}x`, pad.l + cw + 2, lastY + 4)
-
-    // x-axis dates
-    ctx.fillStyle = '#6b7280'
-    ctx.font = '10px monospace'
-    ctx.textAlign = 'center'
-    const labelIdxs = [0, Math.floor((pts.length - 1) / 2), pts.length - 1]
-    labelIdxs.forEach((i) => {
-      const d = new Date(pts[i].ts)
-      const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
-      const x = pad.l + (cw * i) / (pts.length - 1)
-      ctx.fillText(label, x, H - 4)
-    })
+    const pts = [...history].reverse().filter(d => d.price > 0)
+    // Long-only: capture return only when state is LONG
+    drawEquityCanvas(
+      canvasRef.current, pts,
+      (pct, prev) => prev.state === 'LONG' ? pct : 0,
+      '#22c55e', 'rgba(34,197,94,0.2)'
+    )
   }, [history])
+  return <canvas ref={canvasRef} className="w-full" style={{ height: 160, display: 'block' }} />
+}
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="w-full"
-      style={{ height: 160, display: 'block' }}
-    />
-  )
+// ─── Long/Short Equity Curve ──────────────────────────────────────
+function EquityCurveLongShort({ history }) {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    const pts = [...history].reverse().filter(d => d.price > 0)
+    // Long/Short: full return when LONG, inverted return when SHORT
+    drawEquityCanvas(
+      canvasRef.current, pts,
+      (pct, prev) => prev.state === 'LONG' ? pct : -pct,
+      '#818cf8', 'rgba(129,140,248,0.2)'
+    )
+  }, [history])
+  return <canvas ref={canvasRef} className="w-full" style={{ height: 160, display: 'block' }} />
 }
 
 // ─── Rotation Badge ───────────────────────────────────────────────
@@ -467,18 +451,34 @@ export default function TvSignals() {
         </div>
       )}
 
-      {/* ── Equity Curve ── */}
-      {btcHistory.length > 1 && (
-        <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
-            ORPI1 Equity Curve — long-only (TPI ≥ 0)
-          </div>
-          <EquityCurve history={btcHistory} />
-          <div className="text-xs text-gray-600 mt-2">
-            Captures price return only when TPI ≥ 0. Builds from first webhook received.
-          </div>
-        </div>
-      )}
+      {/* ── Equity Curves — real webhook data only (roc !== 0) ── */}
+      {(() => {
+        const realHistory = btcHistory.filter(d => d.roc !== 0)
+        if (realHistory.length < 2) return null
+        return (
+          <>
+            <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                ORPI1 Equity Curve — Long Only
+              </div>
+              <div className="text-xs text-gray-600 mb-3">
+                Captures return only when state = LONG. Flat during SHORT periods.
+              </div>
+              <EquityCurveLongOnly history={realHistory} />
+            </div>
+
+            <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+                ORPI1 Equity Curve — Long / Short
+              </div>
+              <div className="text-xs text-gray-600 mb-3">
+                Mirrors the TV strategy: captures return when LONG, inverts return when SHORT.
+              </div>
+              <EquityCurveLongShort history={realHistory} />
+            </div>
+          </>
+        )
+      })()}
 
       {/* Empty state charts */}
       {btcHistory.length <= 1 && !loading && (
