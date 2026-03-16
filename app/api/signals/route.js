@@ -60,30 +60,39 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url)
   const includeHistory  = searchParams.get('history') !== 'false'
 
-  const [btcSignal, rotationSignal, dailyHistory, transitions, legacyHistory, rotationHistory] =
-    await Promise.all([
-      redisGet('signal:btc'),
-      redisGet('signal:rotation'),
-      includeHistory ? redisHGetAll('btc:daily')       : Promise.resolve([]),
-      includeHistory ? redisHGetAll('btc:transitions') : Promise.resolve([]),
-      includeHistory ? redisList('history:btc', 500)   : Promise.resolve([]),
-      includeHistory ? redisList('history:rotation', 500) : Promise.resolve([]),
-    ])
+  const [
+    btcSignal, rotationSignal,
+    dailyHistory, transitions,
+    legacyHistory, rotationHistory,
+    rotationDaily, rotationTransitions,
+  ] = await Promise.all([
+    redisGet('signal:btc'),
+    redisGet('signal:rotation'),
+    includeHistory ? redisHGetAll('btc:daily')              : Promise.resolve([]),
+    includeHistory ? redisHGetAll('btc:transitions')        : Promise.resolve([]),
+    includeHistory ? redisList('history:btc', 500)          : Promise.resolve([]),
+    includeHistory ? redisList('history:rotation', 500)     : Promise.resolve([]),
+    includeHistory ? redisHGetAll('rotation:daily')         : Promise.resolve([]),
+    includeHistory ? redisHGetAll('rotation:transitions')   : Promise.resolve([]),
+  ])
 
   const btcHistory = dailyHistory.length > 0 ? dailyHistory : legacyHistory
 
   return Response.json({
-    btc:         btcSignal,
-    rotation:    rotationSignal,
+    btc:      btcSignal,
+    rotation: rotationSignal,
     history: {
-      btc:         btcHistory,
-      rotation:    rotationHistory,
+      btc:      btcHistory,
+      rotation: rotationDaily.length > 0 ? rotationDaily : rotationHistory,
     },
-    transitions,   // ← sorted array of state-change events with exact prices
+    transitions,            // BTC state transitions
+    rotationTransitions,    // Asset rotation transitions
     meta: {
-      btc_daily_count:      dailyHistory.length,
-      btc_transitions_count: transitions.length,
-      btc_legacy_count:     legacyHistory.length,
+      btc_daily_count:            dailyHistory.length,
+      btc_transitions_count:      transitions.length,
+      btc_legacy_count:           legacyHistory.length,
+      rotation_daily_count:       rotationDaily.length,
+      rotation_transitions_count: rotationTransitions.length,
       source: dailyHistory.length > 0 ? 'btc:daily hash' : 'history:btc list (legacy)',
     },
     fetched_at: new Date().toISOString(),
