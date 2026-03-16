@@ -451,34 +451,30 @@ export default function TvSignals() {
         </div>
       )}
 
-      {/* ── Equity Curves — real webhook data only (roc !== 0) ── */}
-      {(() => {
-        const realHistory = btcHistory.filter(d => d.roc !== 0)
-        if (realHistory.length < 2) return null
-        return (
-          <>
-            <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-                ORPI1 Equity Curve — Long Only
-              </div>
-              <div className="text-xs text-gray-600 mb-3">
-                Captures return only when state = LONG. Flat during SHORT periods.
-              </div>
-              <EquityCurveLongOnly history={realHistory} />
+      {/* ── Equity Curves — state field is real from CSV seed ── */}
+      {btcHistory.length > 1 && (
+        <>
+          <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+              ORPI1 Equity Curve — Long Only
             </div>
+            <div className="text-xs text-gray-600 mb-3">
+              Captures return only when state = LONG. Flat during SHORT periods.
+            </div>
+            <EquityCurveLongOnly history={btcHistory} />
+          </div>
 
-            <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-              <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-                ORPI1 Equity Curve — Long / Short
-              </div>
-              <div className="text-xs text-gray-600 mb-3">
-                Mirrors the TV strategy: captures return when LONG, inverts return when SHORT.
-              </div>
-              <EquityCurveLongShort history={realHistory} />
+          <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
+            <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+              ORPI1 Equity Curve — Long / Short
             </div>
-          </>
-        )
-      })()}
+            <div className="text-xs text-gray-600 mb-3">
+              Mirrors the TV strategy: full return when LONG, inverted when SHORT.
+            </div>
+            <EquityCurveLongShort history={btcHistory} />
+          </div>
+        </>
+      )}
 
       {/* Empty state charts */}
       {btcHistory.length <= 1 && !loading && (
