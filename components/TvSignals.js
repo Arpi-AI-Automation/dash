@@ -43,37 +43,32 @@ function TpiGauge({ tpi }) {
 
 
 
-// Trade exit markers for dots on the curve
-const TRADE_EXITS = [
-  // T66 SHORT exit → LONG entry
-  { date: '2025-04-21', equity: null },
-  // T67 LONG exit → SHORT entry
-  { date: '2025-06-17', equity: null },
-  // T68 SHORT exit → LONG entry
-  { date: '2025-06-29', equity: null },
-  // T69 LONG exit → SHORT entry
-  { date: '2025-07-01', equity: null },
-  // T70 SHORT exit → LONG entry
-  { date: '2025-07-02', equity: null },
-  // T71 LONG exit → SHORT entry
-  { date: '2025-08-18', equity: null },
-  // T72 SHORT exit → LONG entry
-  { date: '2025-09-16', equity: null },
-  // T73 LONG exit → SHORT entry
-  { date: '2025-09-19', equity: null },
-  // T74 SHORT exit → LONG entry
-  { date: '2025-10-01', equity: null },
-  // T75 LONG exit → SHORT entry
-  { date: '2025-10-10', equity: null },
-  // T76 SHORT exit → LONG entry
-  { date: '2026-01-05', equity: null },
-  // T77 LONG exit → SHORT entry
-  { date: '2026-01-09', equity: null },
-  // T78 SHORT exit → LONG entry
-  { date: '2026-01-11', equity: null },
-  // T79 LONG exit → SHORT entry (T80 open)
-  { date: '2026-01-20', equity: null },
+// TV strategy transition prices — exact 1D close prices from CSV export.
+// These are the prices TV uses for trade entry/exit — NOT Redis live prices.
+// Redis prices differ from TV closes by 1–8%, causing equity inflation.
+// When a new trade exits: update this table and set OPEN_TRADE_ENTRY to the new entry.
+//
+// Format: [date, state_on_this_day, exact_tv_close_price]
+// state = the signal that fired at this bar's close (what you trade going forward)
+// Window start: 2025-03-17, T66 SHORT open from Feb 1 @ $100,646
+const TV_TRANSITIONS = [
+  ['2025-03-17', 'SHORT',  82611.00],   // window start — T66 SHORT open (MTM price)
+  ['2025-04-21', 'LONG',   87500.18],   // T66 exit / T67 entry
+  ['2025-06-17', 'SHORT', 104639.20],   // T67 exit / T68 entry
+  ['2025-06-29', 'LONG',  108381.92],   // T68 exit / T69 entry
+  ['2025-07-01', 'SHORT', 105760.21],   // T69 exit / T70 entry
+  ['2025-07-02', 'LONG',  108900.07],   // T70 exit / T71 entry
+  ['2025-08-18', 'SHORT', 116302.93],   // T71 exit / T72 entry
+  ['2025-09-16', 'LONG',  116818.45],   // T72 exit / T73 entry
+  ['2025-09-19', 'SHORT', 115724.93],   // T73 exit / T74 entry
+  ['2025-10-01', 'LONG',  118639.48],   // T74 exit / T75 entry
+  ['2025-10-10', 'SHORT', 113014.09],   // T75 exit / T76 entry
+  ['2026-01-05', 'LONG',   93842.25],   // T76 exit / T77 entry
+  ['2026-01-09', 'SHORT',  90541.15],   // T77 exit / T78 entry
+  ['2026-01-11', 'LONG',   90894.46],   // T78 exit / T79 entry
+  ['2026-01-20', 'SHORT',  88341.87],   // T79 exit / T80 entry ← T80 still OPEN
 ]
+// T80 SHORT still open — equity interpolates from $88,341.87 to today's live price
 
 // ─── Combined BTC Price + Equity Curve (shared x-axis) ────────────
 // Two equity strategies drawn on the same panel:
@@ -109,70 +104,68 @@ function CombinedChart({ history }) {
     const btcPts = Object.keys(dayMap).sort().map(d => dayMap[d])
     if (btcPts.length < 2) return
 
-    // ── 2. Compute both equity curves — TRADE-LEVEL compounding ──
+    // ── 2. Compute both equity curves — TV-accurate trade-level compounding ──
     //
-    // Method: compound only at state transitions using the transition prices.
-    // Within a segment (no state change), equity is interpolated linearly for display
-    // but the ONLY prices that affect the compounded return are the entry and exit
-    // of each trade segment. This matches how you actually trade: enter at signal,
-    // hold until next signal, exit at that price. No daily rebalancing.
+    // Uses TV_TRANSITIONS: exact 1D close prices from the CSV strategy export.
+    // These match what TradingView uses for trade entry/exit — NOT Redis live prices.
+    // Redis prices differ from TV closes by 1–8%, which inflates equity significantly.
     //
-    // Curve A (L/S):   LONG = gain when price rises, SHORT = gain when price falls
-    // Curve B (HODL):  LONG = hold BTC (price return), SHORT = flat in USD
+    // Method: compound trade-by-trade using the known transition prices.
+    // The final (open) segment interpolates from the last transition price to today's
+    // live BTC price (from Redis) — so the open trade mark-to-market is live.
     //
-    // Both start at 1.0x on the first day of the window (no seeds needed).
-    // No repaint: signal on day[i] (prev) is applied to the move from day[i]→day[j]
-    // where day[j] is the NEXT transition day.
+    // Curve A (L/S):  gains in both directions
+    // Curve B (HODL): LONG = hold BTC, SHORT = hold USD (flat)
 
-    // Build trade segments: [{entryIdx, exitIdx, entryPrice, exitPrice, state}]
-    // Rule: a segment runs from day[segStart] to day[i-1] when state changes on day[i].
-    // The final segment always runs to the last day.
-    // entryPrice = price of first day in segment (signal fired at that close, we enter)
-    // exitPrice  = price of first day of NEXT segment (that's when we exit and re-enter)
-    const segments = []
-    let segStart = 0
-    for (let i = 1; i < btcPts.length; i++) {
-      if (btcPts[i].state !== btcPts[segStart].state) {
-        // Segment ends at i-1, but we exit at day[i]'s price (first day of new state)
-        segments.push({
-          entryIdx:   segStart,
-          exitIdx:    i,                        // display interpolates up to this index
-          entryPrice: btcPts[segStart].price,
-          exitPrice:  btcPts[i].price,          // exit = entry price of next segment
-          state:      btcPts[segStart].state,
-        })
-        segStart = i
-      }
-    }
-    // Final open segment: entry at last transition, exit at today's price
-    segments.push({
-      entryIdx:   segStart,
-      exitIdx:    btcPts.length - 1,
-      entryPrice: btcPts[segStart].price,
-      exitPrice:  btcPts[btcPts.length - 1].price,
-      state:      btcPts[segStart].state,
+    // Map each TV_TRANSITIONS date to the nearest btcPts index
+    const dateToIdx = {}
+    btcPts.forEach((p, i) => {
+      const d = new Date(p.ts).toISOString().slice(0, 10)
+      dateToIdx[d] = i
     })
 
-    // Build per-point arrays by interpolating equity within each segment
-    const eqLSnorm   = new Array(btcPts.length)
-    const eqHODLnorm = new Array(btcPts.length)
+    // Build segments from TV_TRANSITIONS using exact TV prices
+    // For display interpolation, map transition dates to btcPts indices
+    const tvSegs = []
+    for (let i = 0; i < TV_TRANSITIONS.length; i++) {
+      const [entryDate, state, entryPrice] = TV_TRANSITIONS[i]
+      let exitPrice, exitIdx
+
+      if (i < TV_TRANSITIONS.length - 1) {
+        // Exit = next transition's price (exact TV close)
+        const [nextDate, , nextPrice] = TV_TRANSITIONS[i + 1]
+        exitPrice = nextPrice
+        exitIdx   = dateToIdx[nextDate] ?? btcPts.length - 1
+      } else {
+        // Final open segment: exit at today's live price (from Redis)
+        exitPrice = btcPts[btcPts.length - 1].price
+        exitIdx   = btcPts.length - 1
+      }
+
+      const entryIdx = dateToIdx[entryDate] ?? 0
+      if (exitIdx <= entryIdx) continue  // safety: skip degenerate segments
+
+      tvSegs.push({ entryIdx, exitIdx, entryPrice, exitPrice, state })
+    }
+
+    // Build per-point arrays: interpolate linearly within each segment for display
+    const eqLSnorm   = new Array(btcPts.length).fill(null)
+    const eqHODLnorm = new Array(btcPts.length).fill(null)
     eqLSnorm[0]   = 1.0
     eqHODLnorm[0] = 1.0
 
     let cumLS   = 1.0
     let cumHODL = 1.0
 
-    for (const seg of segments) {
+    for (const seg of tvSegs) {
       const { entryIdx, exitIdx, entryPrice, exitPrice, state } = seg
-      const rawPct   = (exitPrice - entryPrice) / entryPrice
-      const lsPct    = state === 'LONG' ? rawPct : -rawPct
-      const hodlPct  = state === 'LONG' ? rawPct : 0
-
+      const rawPct      = (exitPrice - entryPrice) / entryPrice
+      const lsPct       = state === 'LONG' ? rawPct : -rawPct
+      const hodlPct     = state === 'LONG' ? rawPct : 0
       const segLS_end   = cumLS   * (1 + lsPct)
       const segHODL_end = cumHODL * (1 + hodlPct)
+      const steps       = exitIdx - entryIdx
 
-      // Interpolate display points linearly within the segment
-      const steps = exitIdx - entryIdx
       for (let k = 1; k <= steps; k++) {
         const t = k / steps
         eqLSnorm[entryIdx + k]   = cumLS   + (segLS_end   - cumLS)   * t
@@ -181,6 +174,12 @@ function CombinedChart({ history }) {
 
       cumLS   = segLS_end
       cumHODL = segHODL_end
+    }
+
+    // Fill any remaining nulls (safety net for date mismatches)
+    for (let i = 1; i < btcPts.length; i++) {
+      if (eqLSnorm[i]   === null) eqLSnorm[i]   = eqLSnorm[i-1]
+      if (eqHODLnorm[i] === null) eqHODLnorm[i] = eqHODLnorm[i-1]
     }
 
     // ── 3. Layout ──
@@ -271,9 +270,9 @@ function CombinedChart({ history }) {
     // Curve A (purple, Long/Short)
     drawCurve(eqLSnorm,   '#818cf8', 'rgba(129,140,248,0.12)')
 
-    // Signal-change dots on both curves
-    TRADE_EXITS.forEach(exit => {
-      const idx = btcPts.findIndex(p => new Date(p.ts).toISOString().slice(0, 10) === exit.date)
+    // Signal-change dots at each transition date
+    TV_TRANSITIONS.slice(1).forEach(([date]) => {
+      const idx = btcPts.findIndex(p => new Date(p.ts).toISOString().slice(0, 10) === date)
       if (idx < 0) return
       ;[[eqLSnorm, '#818cf8'], [eqHODLnorm, '#f59e0b']].forEach(([pts, col]) => {
         ctx.beginPath(); ctx.arc(eX(idx), eY(pts[idx] ?? 1), 2.5, 0, Math.PI * 2)
