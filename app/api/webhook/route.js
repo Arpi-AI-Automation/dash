@@ -30,7 +30,7 @@ async function redisPush(key, value) {
       Authorization: `Bearer ${REDIS_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify([0, 364]),
+    body: JSON.stringify([0, 499]),
   })
 }
 

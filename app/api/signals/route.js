@@ -49,8 +49,8 @@ export async function GET(request) {
   const [btcSignal, rotationSignal, btcHistory, rotationHistory] = await Promise.all([
     redisGet('signal:btc'),
     redisGet('signal:rotation'),
-    includeHistory ? redisList('history:btc', 180) : Promise.resolve([]),
-    includeHistory ? redisList('history:rotation', 90) : Promise.resolve([]),
+    includeHistory ? redisList('history:btc', 500) : Promise.resolve([]),
+    includeHistory ? redisList('history:rotation', 500) : Promise.resolve([]),
   ])
 
   return Response.json({
