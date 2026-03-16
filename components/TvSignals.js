@@ -281,14 +281,16 @@ function CombinedChart({ history }) {
       })
     })
 
-    // End-of-curve labels — placed INSIDE left margin to avoid overlap with curves
+    // End-of-curve labels — right side, outside plot area
     const lastLS   = eqLSnorm[eqLSnorm.length - 1]
     const lastHODL = eqHODLnorm[eqHODLnorm.length - 1]
-    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'right'
+    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left'
     ctx.fillStyle = '#818cf8'
-    ctx.fillText(`${lastLS.toFixed(3)}x`, pad.l - 6, eY(lastLS) + 4)
+    ctx.fillText(`${lastLS.toFixed(3)}x`, pad.l + cw + 4, eY(lastLS) + 4)
     ctx.fillStyle = '#f59e0b'
-    ctx.fillText(`${lastHODL.toFixed(3)}x`, pad.l - 6, eY(lastHODL) + 4)
+    const lsDiff = Math.abs(eY(lastLS) - eY(lastHODL))
+    const hodlOffset = lsDiff < 12 ? 12 : 0
+    ctx.fillText(`${lastHODL.toFixed(3)}x`, pad.l + cw + 4, eY(lastHODL) + 4 + hodlOffset)
 
     // ── 6. Shared x-axis labels ──
     ctx.fillStyle = '#6b7280'; ctx.font = '9px monospace'; ctx.textAlign = 'center'
