@@ -48,27 +48,26 @@ function TpiGauge({ tpi }) {
 // Redis prices differ from TV closes by 1–8%, causing equity inflation.
 // When a new trade exits: update this table and set OPEN_TRADE_ENTRY to the new entry.
 //
-// Format: [date, state_on_this_day, exact_tv_close_price]
-// state = the signal that fired at this bar's close (what you trade going forward)
-// Window start: 2025-03-17, T66 SHORT open from Feb 1 @ $100,646
-const TV_TRANSITIONS = [
-  ['2025-03-17', 'SHORT',  82611.00],   // window start — T66 SHORT open (MTM price)
-  ['2025-04-21', 'LONG',   87500.18],   // T66 exit / T67 entry
-  ['2025-06-17', 'SHORT', 104639.20],   // T67 exit / T68 entry
-  ['2025-06-29', 'LONG',  108381.92],   // T68 exit / T69 entry
-  ['2025-07-01', 'SHORT', 105760.21],   // T69 exit / T70 entry
-  ['2025-07-02', 'LONG',  108900.07],   // T70 exit / T71 entry
-  ['2025-08-18', 'SHORT', 116302.93],   // T71 exit / T72 entry
-  ['2025-09-16', 'LONG',  116818.45],   // T72 exit / T73 entry
-  ['2025-09-19', 'SHORT', 115724.93],   // T73 exit / T74 entry
-  ['2025-10-01', 'LONG',  118639.48],   // T74 exit / T75 entry
-  ['2025-10-10', 'SHORT', 113014.09],   // T75 exit / T76 entry
-  ['2026-01-05', 'LONG',   93842.25],   // T76 exit / T77 entry
-  ['2026-01-09', 'SHORT',  90541.15],   // T77 exit / T78 entry
-  ['2026-01-11', 'LONG',   90894.46],   // T78 exit / T79 entry
-  ['2026-01-20', 'SHORT',  88341.87],   // T79 exit / T80 entry ← T80 still OPEN
+// FALLBACK ONLY — used if Redis btc:transitions hash is empty (e.g. first boot before backfill)
+// The live system reads transitions from the API (data.transitions) automatically.
+// No manual updates ever needed — the webhook writes new transitions on every state change.
+const TV_TRANSITIONS_FALLBACK = [
+  ['2025-03-17', 'SHORT',  82611.00],
+  ['2025-04-21', 'LONG',   87500.18],
+  ['2025-06-17', 'SHORT', 104639.20],
+  ['2025-06-29', 'LONG',  108381.92],
+  ['2025-07-01', 'SHORT', 105760.21],
+  ['2025-07-02', 'LONG',  108900.07],
+  ['2025-08-18', 'SHORT', 116302.93],
+  ['2025-09-16', 'LONG',  116818.45],
+  ['2025-09-19', 'SHORT', 115724.93],
+  ['2025-10-01', 'LONG',  118639.48],
+  ['2025-10-10', 'SHORT', 113014.09],
+  ['2026-01-05', 'LONG',   93842.25],
+  ['2026-01-09', 'SHORT',  90541.15],
+  ['2026-01-11', 'LONG',   90894.46],
+  ['2026-01-20', 'SHORT',  88341.87],
 ]
-// T80 SHORT still open — equity interpolates from $88,341.87 to today's live price
 
 // ─── Combined BTC Price + Equity Curve (shared x-axis) ────────────
 // Two equity strategies drawn on the same panel:
@@ -364,7 +363,7 @@ export default function TvSignals() {
 
   const fetchSignals = async () => {
     try {
-      const res = await fetch('/api/signals')
+      const res = await fetch('/api/signals?history=true')
       if (!res.ok) throw new Error('Failed to fetch signals')
       const json = await res.json()
       setData(json)
@@ -401,6 +400,15 @@ export default function TvSignals() {
   const btc = data?.btc
   const rotation = data?.rotation
   const btcHistory = data?.history?.btc || []
+
+  // Build TV_TRANSITIONS from Redis (via API) — auto-updated by webhook on every state change
+  // Falls back to hardcoded array if Redis transitions not yet populated (e.g. before backfill)
+  const rawTransitions = data?.transitions || []
+  const TV_TRANSITIONS = rawTransitions.length > 0
+    ? rawTransitions
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(t => [t.date, t.state, t.price])
+    : TV_TRANSITIONS_FALLBACK
   const stateMeta = STATE_META[btc?.state] || STATE_META['NEUTRAL']
 
   // ── Top signal banner (for embedding in page.js header area) ──
