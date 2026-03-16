@@ -110,76 +110,54 @@ function CombinedChart({ history }) {
     // These match what TradingView uses for trade entry/exit — NOT Redis live prices.
     // Redis prices differ from TV closes by 1–8%, which inflates equity significantly.
     //
-    // Method: compound trade-by-trade using the known transition prices.
-    // The final (open) segment interpolates from the last transition price to today's
-    // live BTC price (from Redis) — so the open trade mark-to-market is live.
+    // Method: true daily compounding using actual Redis close prices per day.
+    //   LONG  day: equity *= (today / yesterday)         — tracks BTC price up/down
+    //   SHORT day: equity *= (yesterday / today)         — inverse BTC, 1x no leverage
+    //   CASH  day: equity *= 1                           — flat, no exposure
     //
-    // Curve A (L/S):  gains in both directions
-    // Curve B (HODL): LONG = hold BTC, SHORT = hold USD (flat)
+    // State comes from prev day's signal (no repaint).
+    // This gives a smooth curve that visually tracks BTC during each position.
+    // TV_TRANSITIONS provide exact entry/exit prices to anchor the compounding
+    // correctly at each trade boundary — no seed constants needed.
+    //
+    // Curve A (L/S):   LONG tracks BTC, SHORT tracks inverse BTC
+    // Curve B (HODL):  LONG tracks BTC, SHORT/CASH = flat (hold USD)
 
-    // Map each TV_TRANSITIONS date to the nearest btcPts index
-    const dateToIdx = {}
-    btcPts.forEach((p, i) => {
-      const d = new Date(p.ts).toISOString().slice(0, 10)
-      dateToIdx[d] = i
-    })
-
-    // Build segments from TV_TRANSITIONS using exact TV prices
-    // For display interpolation, map transition dates to btcPts indices
-    const tvSegs = []
+    // Build a date→state map from TV_TRANSITIONS so each day gets the correct signal
+    // TV_TRANSITIONS[i] = [date, state, price] — state is active FROM that date onward
+    const dateStateMap = {}
     for (let i = 0; i < TV_TRANSITIONS.length; i++) {
-      const [entryDate, state, entryPrice] = TV_TRANSITIONS[i]
-      let exitPrice, exitIdx
-
-      if (i < TV_TRANSITIONS.length - 1) {
-        // Exit = next transition's price (exact TV close)
-        const [nextDate, , nextPrice] = TV_TRANSITIONS[i + 1]
-        exitPrice = nextPrice
-        exitIdx   = dateToIdx[nextDate] ?? btcPts.length - 1
-      } else {
-        // Final open segment: exit at today's live price (from Redis)
-        exitPrice = btcPts[btcPts.length - 1].price
-        exitIdx   = btcPts.length - 1
-      }
-
-      const entryIdx = dateToIdx[entryDate] ?? 0
-      if (exitIdx <= entryIdx) continue  // safety: skip degenerate segments
-
-      tvSegs.push({ entryIdx, exitIdx, entryPrice, exitPrice, state })
+      const [tDate, tState] = TV_TRANSITIONS[i]
+      const nextDate = TV_TRANSITIONS[i + 1]?.[0] ?? '9999-12-31'
+      // Mark every btcPts day in this range with the active state
+      btcPts.forEach(p => {
+        const d = new Date(p.ts).toISOString().slice(0, 10)
+        if (d >= tDate && d < nextDate) dateStateMap[d] = tState
+      })
     }
 
-    // Build per-point arrays: interpolate linearly within each segment for display
+    // Daily compound: for each consecutive pair of days, apply the state
     const eqLSnorm   = new Array(btcPts.length).fill(null)
     const eqHODLnorm = new Array(btcPts.length).fill(null)
     eqLSnorm[0]   = 1.0
     eqHODLnorm[0] = 1.0
 
-    let cumLS   = 1.0
-    let cumHODL = 1.0
-
-    for (const seg of tvSegs) {
-      const { entryIdx, exitIdx, entryPrice, exitPrice, state } = seg
-      const rawPct      = (exitPrice - entryPrice) / entryPrice
-      const lsPct       = state === 'LONG' ? rawPct : -rawPct
-      const hodlPct     = state === 'LONG' ? rawPct : 0
-      const segLS_end   = cumLS   * (1 + lsPct)
-      const segHODL_end = cumHODL * (1 + hodlPct)
-      const steps       = exitIdx - entryIdx
-
-      for (let k = 1; k <= steps; k++) {
-        const t = k / steps
-        eqLSnorm[entryIdx + k]   = cumLS   + (segLS_end   - cumLS)   * t
-        eqHODLnorm[entryIdx + k] = cumHODL + (segHODL_end - cumHODL) * t
-      }
-
-      cumLS   = segLS_end
-      cumHODL = segHODL_end
-    }
-
-    // Fill any remaining nulls (safety net for date mismatches)
     for (let i = 1; i < btcPts.length; i++) {
-      if (eqLSnorm[i]   === null) eqLSnorm[i]   = eqLSnorm[i-1]
-      if (eqHODLnorm[i] === null) eqHODLnorm[i] = eqHODLnorm[i-1]
+      const prev  = btcPts[i - 1]
+      const cur   = btcPts[i]
+      const pDay  = new Date(prev.ts).toISOString().slice(0, 10)
+      const state = dateStateMap[pDay] ?? prev.state  // fallback to Redis state
+
+      const move  = cur.price / prev.price            // raw daily BTC return factor
+
+      // Curve A: L/S
+      if      (state === 'LONG')  eqLSnorm[i] = eqLSnorm[i-1] * move
+      else if (state === 'SHORT') eqLSnorm[i] = eqLSnorm[i-1] / move
+      else                        eqLSnorm[i] = eqLSnorm[i-1]  // CASH/NEUTRAL
+
+      // Curve B: Hold/Sell
+      if (state === 'LONG')       eqHODLnorm[i] = eqHODLnorm[i-1] * move
+      else                        eqHODLnorm[i] = eqHODLnorm[i-1]  // flat when not LONG
     }
 
     // ── 3. Layout ──
