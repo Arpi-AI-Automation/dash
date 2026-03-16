@@ -76,22 +76,10 @@ function EquityCanvas({ history, transitions }) {
       })
     }
 
-    // Each day: use prev day's asset, track that asset's return
-    // Since we don't have per-asset prices in rotation history,
-    // we use the daily return stored in each entry if available,
-    // otherwise treat as flat (equity ≈ 1 until we have real price data)
-    for (let i = 1; i < pts.length; i++) {
-      const prevDate  = pts[i - 1].date
-      const curDate   = pts[i].date
-      const asset     = dateAssetMap[prevDate] ?? assetKey(pts[i - 1].asset)
-
-      // If we have daily return data for the held asset, use it
-      // rotation:daily entries store {asset, scores, ts, date}
-      // No per-asset prices stored yet — equity tracks only switch points
-      // We'll use a simple: flat per day, compound at transitions
-      // (Real per-asset prices need separate daily price feed — phase 2)
-      const rtn = pts[i].returns?.[asset] ?? 0
-      eqNorm[i] = eqNorm[i - 1] * (asset === 'usd' ? 1 : (1 + rtn))
+    // Equity values are pre-computed server-side (fixed-quantity model, real CoinGecko prices)
+    // Each entry has .equity stored directly — just read it
+    for (let i = 0; i < pts.length; i++) {
+      eqNorm[i] = pts[i].equity ?? eqNorm[i - 1] ?? 1.0
     }
 
     // Safety fill
