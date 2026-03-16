@@ -125,9 +125,31 @@ function BtcPriceChart({ history }) {
   )
 }
 
-// ─── Shared canvas equity drawer ─────────────────────────────────
-function drawEquityCanvas(canvas, pts, equityFn, lineColor, gradColor) {
-  if (!canvas || pts.length < 2) return
+// ─── Trade-accurate equity curve ─────────────────────────────────
+// Ground truth from TV strategy CSV. Step-function: flat during trade,
+// steps at exit. Final point interpolated live from current BTC price.
+//
+// Trade 10 open: SHORT entered $88,341.87 on 2026-01-20
+// At exit the equity steps to: prevEquity * (entryPrice / currentPrice)
+// since shorting profits when price falls.
+const TRADE_EQUITY_PTS = [
+  { date: '2025-08-07', equity: 1.0000 }, // T1 entry (strategy start)
+  { date: '2025-08-18', equity: 0.9896 }, // T1 exit  SHORT entry (-1.04%)
+  { date: '2025-09-16', equity: 0.9956 }, // T2 exit  LONG entry  (-0.44%)
+  { date: '2025-09-19', equity: 0.9906 }, // T3 exit  SHORT entry (-0.94%)
+  { date: '2025-10-01', equity: 0.9748 }, // T4 exit  LONG entry  (-2.52%)
+  { date: '2025-10-10', equity: 0.9526 }, // T5 exit  SHORT entry (-4.74%)
+  { date: '2026-01-05', equity: 1.1696 }, // T6 exit  LONG entry  (+16.96%)
+  { date: '2026-01-09', equity: 0.9648 }, // T7 exit  SHORT entry (-3.52%)
+  { date: '2026-01-11', equity: 0.9961 }, // T8 exit  LONG entry  (-0.39%)
+  { date: '2026-01-20', equity: 0.9719 }, // T9 exit  SHORT entry (-2.81%)
+  // T10: SHORT entered $88,341.87 — open trade, live endpoint added below
+]
+const T10_ENTRY_PRICE = 88341.87
+const T10_ENTRY_EQUITY = 0.9719 // equity at T10 entry
+
+function drawTradeEquityCanvas(canvas, liveBtcPrice) {
+  if (!canvas) return
   const ctx = canvas.getContext('2d')
   const dpr = window.devicePixelRatio || 1
   const W = canvas.clientWidth
@@ -136,30 +158,38 @@ function drawEquityCanvas(canvas, pts, equityFn, lineColor, gradColor) {
   canvas.height = H * dpr
   ctx.scale(dpr, dpr)
 
-  const equity = [1]
-  for (let i = 1; i < pts.length; i++) {
-    const prev = pts[i - 1], cur = pts[i]
-    const pct = prev.price > 0 ? (cur.price - prev.price) / prev.price : 0
-    equity.push(equity[equity.length - 1] * (1 + equityFn(pct, prev, cur)))
+  // Build final pts array: hardcoded + live endpoint
+  const pts = [...TRADE_EQUITY_PTS]
+  if (liveBtcPrice > 0) {
+    // T10 is SHORT: profit = entry/current - 1
+    const liveEquity = T10_ENTRY_EQUITY * (T10_ENTRY_PRICE / liveBtcPrice)
+    pts.push({ date: new Date().toISOString().slice(0, 10), equity: liveEquity })
   }
 
-  const minE = Math.min(...equity)
-  const maxE = Math.max(...equity)
+  const equityVals = pts.map(p => p.equity)
+  const minE = Math.min(...equityVals)
+  const maxE = Math.max(...equityVals)
   const range = maxE - minE || 0.01
-  const pad = { t: 12, r: 36, b: 24, l: 52 }
+  const pad = { t: 12, r: 46, b: 24, l: 52 }
   const cw = W - pad.l - pad.r
   const ch = H - pad.t - pad.b
 
   ctx.clearRect(0, 0, W, H)
 
-  // baseline
-  const baseY = pad.t + ch - (ch * (1 - minE)) / range
+  // 1.0 baseline
+  const baseY = pad.t + ch - (ch * (1.0 - minE)) / range
   ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5
   ctx.setLineDash([4, 4])
   ctx.beginPath(); ctx.moveTo(pad.l, baseY); ctx.lineTo(pad.l + cw, baseY); ctx.stroke()
   ctx.setLineDash([])
 
-  // grid + y-axis labels
+  // Convert date string to x position
+  const startTs = new Date(pts[0].date).getTime()
+  const endTs = new Date(pts[pts.length - 1].date).getTime()
+  const totalMs = endTs - startTs || 1
+  const dateX = (dateStr) => pad.l + (cw * (new Date(dateStr).getTime() - startTs)) / totalMs
+
+  // Grid + y-axis labels
   ctx.font = '10px monospace'; ctx.textAlign = 'right'
   for (let i = 0; i <= 4; i++) {
     const v = minE + (range * i) / 4
@@ -170,71 +200,74 @@ function drawEquityCanvas(canvas, pts, equityFn, lineColor, gradColor) {
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
   }
 
-  // gradient fill
+  // Colour regions: green when equity rising (SHORT profitable), red when falling
+  // Draw gradient fill
+  const lastPt = pts[pts.length - 1]
+  const lastEq = lastPt.equity
+  const fillColor = lastEq >= T10_ENTRY_EQUITY ? 'rgba(129,140,248,0.15)' : 'rgba(239,68,68,0.1)'
+  const lineColor = lastEq >= 1.0 ? '#818cf8' : '#f87171'
+
   const grad = ctx.createLinearGradient(0, pad.t, 0, pad.t + ch)
-  grad.addColorStop(0, gradColor); grad.addColorStop(1, 'rgba(0,0,0,0)')
+  grad.addColorStop(0, lastEq >= 1.0 ? 'rgba(129,140,248,0.25)' : 'rgba(239,68,68,0.15)')
+  grad.addColorStop(1, 'rgba(0,0,0,0)')
+
   ctx.beginPath()
-  equity.forEach((v, i) => {
-    const x = pad.l + (cw * i) / (equity.length - 1)
-    const y = pad.t + ch - (ch * (v - minE)) / range
+  pts.forEach((p, i) => {
+    const x = dateX(p.date)
+    const y = pad.t + ch - (ch * (p.equity - minE)) / range
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
   })
-  ctx.lineTo(pad.l + cw, pad.t + ch); ctx.lineTo(pad.l, pad.t + ch)
+  ctx.lineTo(dateX(lastPt.date), pad.t + ch)
+  ctx.lineTo(pad.l, pad.t + ch)
   ctx.closePath(); ctx.fillStyle = grad; ctx.fill()
 
-  // line
-  ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
-  ctx.beginPath()
-  equity.forEach((v, i) => {
-    const x = pad.l + (cw * i) / (equity.length - 1)
-    const y = pad.t + ch - (ch * (v - minE)) / range
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  // Equity line — colour segment by whether above/below 1.0
+  ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
+  pts.forEach((p, i) => {
+    if (i === 0) return
+    const prev = pts[i - 1]
+    ctx.strokeStyle = prev.equity >= 1.0 && p.equity >= 1.0 ? '#818cf8'
+      : prev.equity < 1.0 && p.equity < 1.0 ? '#f87171'
+      : '#818cf8'
+    ctx.beginPath()
+    ctx.moveTo(dateX(prev.date), pad.t + ch - (ch * (prev.equity - minE)) / range)
+    ctx.lineTo(dateX(p.date), pad.t + ch - (ch * (p.equity - minE)) / range)
+    ctx.stroke()
   })
-  ctx.stroke()
 
-  // final value label
-  const lastVal = equity[equity.length - 1]
-  const lastY = pad.t + ch - (ch * (lastVal - minE)) / range
-  ctx.fillStyle = lineColor; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left'
-  ctx.fillText(`${lastVal.toFixed(2)}x`, pad.l + cw + 3, lastY + 4)
+  // Trade exit dots
+  TRADE_EQUITY_PTS.slice(1).forEach(p => {
+    const x = dateX(p.date)
+    const y = pad.t + ch - (ch * (p.equity - minE)) / range
+    ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2)
+    ctx.fillStyle = p.equity >= 1.0 ? '#818cf8' : '#f87171'
+    ctx.fill()
+  })
 
-  // x-axis dates
+  // Final value label
+  const finalX = dateX(lastPt.date)
+  const finalY = pad.t + ch - (ch * (lastEq - minE)) / range
+  const finalColor = lastEq >= 1.0 ? '#818cf8' : '#f87171'
+  ctx.fillStyle = finalColor; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'left'
+  ctx.fillText(`${lastEq.toFixed(4)}x`, finalX + 4, finalY + 4)
+
+  // X-axis: start, mid, end
   ctx.fillStyle = '#6b7280'; ctx.font = '10px monospace'; ctx.textAlign = 'center'
-  ;[0, Math.floor((pts.length - 1) / 2), pts.length - 1].forEach((i) => {
-    const d = new Date(pts[i].ts)
+  ;[pts[0], pts[Math.floor(pts.length / 2)], lastPt].forEach(p => {
+    const d = new Date(p.date)
     const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
-    ctx.fillText(label, pad.l + (cw * i) / (pts.length - 1), H - 4)
+    ctx.fillText(label, dateX(p.date), H - 4)
   })
 }
 
-// ─── Long-only Equity Curve ───────────────────────────────────────
-function EquityCurveLongOnly({ history }) {
+// ─── Long/Short Equity Curve (TV-accurate) ────────────────────────
+function EquityCurveLongShort({ btcSignal }) {
   const canvasRef = useRef(null)
+  const liveBtcPrice = btcSignal?.price || 0
   useEffect(() => {
-    const pts = [...history].reverse().filter(d => d.price > 0)
-    // Long-only: capture return only when state is LONG
-    drawEquityCanvas(
-      canvasRef.current, pts,
-      (pct, prev) => prev.state === 'LONG' ? pct : 0,
-      '#22c55e', 'rgba(34,197,94,0.2)'
-    )
-  }, [history])
-  return <canvas ref={canvasRef} className="w-full" style={{ height: 160, display: 'block' }} />
-}
-
-// ─── Long/Short Equity Curve ──────────────────────────────────────
-function EquityCurveLongShort({ history }) {
-  const canvasRef = useRef(null)
-  useEffect(() => {
-    const pts = [...history].reverse().filter(d => d.price > 0)
-    // Long/Short: full return when LONG, inverted return when SHORT
-    drawEquityCanvas(
-      canvasRef.current, pts,
-      (pct, prev) => prev.state === 'LONG' ? pct : -pct,
-      '#818cf8', 'rgba(129,140,248,0.2)'
-    )
-  }, [history])
-  return <canvas ref={canvasRef} className="w-full" style={{ height: 160, display: 'block' }} />
+    drawTradeEquityCanvas(canvasRef.current, liveBtcPrice)
+  }, [liveBtcPrice])
+  return <canvas ref={canvasRef} className="w-full" style={{ height: 180, display: 'block' }} />
 }
 
 // ─── Rotation Badge ───────────────────────────────────────────────
@@ -451,30 +484,27 @@ export default function TvSignals() {
         </div>
       )}
 
-      {/* ── Equity Curves — state field is real from CSV seed ── */}
-      {btcHistory.length > 1 && (
-        <>
-          <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-            <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-              ORPI1 Equity Curve — Long Only
-            </div>
-            <div className="text-xs text-gray-600 mb-3">
-              Captures return only when state = LONG. Flat during SHORT periods.
-            </div>
-            <EquityCurveLongOnly history={btcHistory} />
-          </div>
-
-          <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-            <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
-              ORPI1 Equity Curve — Long / Short
-            </div>
-            <div className="text-xs text-gray-600 mb-3">
-              Mirrors the TV strategy: full return when LONG, inverted when SHORT.
-            </div>
-            <EquityCurveLongShort history={btcHistory} />
-          </div>
-        </>
-      )}
+      {/* ── ORPI1 Equity Curve (TV-accurate, trade-by-trade) ── */}
+      <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
+        <div className="text-xs text-gray-500 uppercase tracking-wider mb-1">
+          ORPI1 Equity Curve — Long / Short
+        </div>
+        <div className="text-xs text-gray-600 mb-3">
+          Trade-accurate · sourced from TV strategy CSV · live endpoint from current BTC price · starts Aug 7 2025
+        </div>
+        <EquityCurveLongShort btcSignal={btc} />
+        <div className="flex gap-4 mt-2 text-xs text-gray-600">
+          <span className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-indigo-400" /> Above 1.0x
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-red-400" /> Below 1.0x
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-gray-500" /> Exit dots
+          </span>
+        </div>
+      </div>
 
       {/* Empty state charts */}
       {btcHistory.length <= 1 && !loading && (
