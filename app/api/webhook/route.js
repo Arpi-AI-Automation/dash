@@ -43,11 +43,14 @@ async function redisSet(key, value) {
 // HSET into a hash: hset <hashKey> <field> <value>
 // Used for btc:daily — field = "YYYY-MM-DD", value = JSON entry
 // Overwrites same-day entries automatically (idempotent)
+// Upstash REST: args go in the URL path, not the body
 async function redisHSet(hashKey, field, value) {
-  const res = await fetch(`${REDIS_URL}/hset/${encodeURIComponent(hashKey)}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify([field, JSON.stringify(value)]),
+  const key   = encodeURIComponent(hashKey)
+  const f     = encodeURIComponent(field)
+  const v     = encodeURIComponent(JSON.stringify(value))
+  const res   = await fetch(`${REDIS_URL}/hset/${key}/${f}/${v}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
   })
   return res.json()
 }
