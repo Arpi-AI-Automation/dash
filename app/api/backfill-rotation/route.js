@@ -1,25 +1,34 @@
 // app/api/backfill-rotation/route.js
-// ONE-TIME: Seeds rotation:daily and rotation:transitions from historical data
-// Fetches real prices from CoinGecko for each held asset per day
+// ONE-TIME: Seeds rotation:daily and rotation:transitions
+// Supports ?asset=bnb to retry a single failed asset
 // DELETE THIS FILE after running once.
 
 const REDIS_URL      = process.env.UPSTASH_REDIS_REST_URL
 const REDIS_TOKEN    = process.env.UPSTASH_REDIS_REST_TOKEN
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'Arpi-vypi-2026-btc'
 
-const headers = { Authorization: `Bearer ${REDIS_TOKEN}` }
+const redisHeaders = { Authorization: `Bearer ${REDIS_TOKEN}` }
 
 async function redisHSet(hashKey, field, value) {
   const key = encodeURIComponent(hashKey)
   const f   = encodeURIComponent(field)
   const v   = encodeURIComponent(JSON.stringify(value))
   const res = await fetch(`${REDIS_URL}/hset/${key}/${f}/${v}`, {
-    method: 'GET', headers,
+    method: 'GET', headers: redisHeaders,
   })
   return res.json()
 }
 
-// Rotation history — exact dates asset became dominant
+async function redisHGet(hashKey, field) {
+  const res = await fetch(
+    `${REDIS_URL}/hget/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}`,
+    { method: 'GET', headers: redisHeaders }
+  )
+  const d = await res.json()
+  if (!d.result) return null
+  try { return JSON.parse(d.result) } catch { return d.result }
+}
+
 const ROTATIONS = [
   { date: '2025-03-17', asset: 'paxg' },
   { date: '2025-04-23', asset: 'sol'  },
@@ -95,100 +104,151 @@ export async function GET(request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const START = '2025-03-16'  // one day before for prev-close
+  const singleAsset = searchParams.get('asset') // e.g. ?asset=bnb to patch one asset
+
+  const START = '2025-03-16'
   const END   = '2026-03-16'
   const startTs = Math.floor(new Date(START + 'T00:00:00Z').getTime() / 1000)
   const endTs   = Math.floor(new Date(END   + 'T23:59:59Z').getTime() / 1000)
 
-  // 1. Fetch prices for all non-USD assets
+  const assetMap = buildAssetMap()
+
+  // Determine which assets to fetch
+  const allNeeded = [...new Set(ROTATIONS.map(r => r.asset).filter(a => a !== 'usd'))]
+  const toFetch   = singleAsset ? [singleAsset] : allNeeded
+
+  // Fetch prices
   const prices = {}
   const fetchErrors = []
 
-  const neededAssets = [...new Set(ROTATIONS.map(r => r.asset).filter(a => a !== 'usd'))]
-
-  for (const asset of neededAssets) {
+  for (const asset of toFetch) {
     const cgId = COINGECKO_IDS[asset]
+    if (!cgId) { fetchErrors.push(`unknown asset: ${asset}`); continue }
     try {
       prices[asset] = await fetchPrices(cgId, startTs, endTs)
-      await sleep(1500)  // CoinGecko rate limit
+      await sleep(1500)
     } catch (e) {
       fetchErrors.push(`${asset}: ${e.message}`)
       prices[asset] = {}
     }
   }
 
-  // 2. Build date→asset map
-  const assetMap = buildAssetMap()
-  const allDates = dateRange('2025-03-17', END)
+  if (singleAsset) {
+    // Patch mode: only update days where this asset was held
+    // Read existing entries, update equity for affected segments, rewrite
+    const asset = singleAsset
+    const assetPrices = prices[asset] ?? {}
 
-  // 3. Compute equity curve day by day (fixed-quantity model within each segment)
-  // Each rotation segment: equity[day] = segStartEquity * (price[day] / entryPrice)
+    if (Object.keys(assetPrices).length === 0) {
+      return Response.json({ ok: false, error: `No prices fetched for ${asset}`, fetchErrors })
+    }
+
+    // Find all segments for this asset and their preceding cumulative equity
+    let cumEquity = 1.0
+    let written = 0
+
+    for (let i = 0; i < ROTATIONS.length; i++) {
+      const { date: segStart, asset: segAsset } = ROTATIONS[i]
+      const segEnd    = ROTATIONS[i + 1]?.date ?? END
+      const segDates  = dateRange(segStart, segEnd).filter(d => d <= END)
+      const entryPrice = assetPrices[segStart] ?? null
+      const segStartEquity = cumEquity
+
+      if (segAsset === asset && entryPrice) {
+        // Rewrite these days with correct equity
+        for (const d of segDates) {
+          const currentPrice = assetPrices[d] ?? null
+          const equity = currentPrice ? segStartEquity * (currentPrice / entryPrice) : segStartEquity
+          await redisHSet('rotation:daily', d, {
+            date: d, asset, equity: Math.round(equity * 100000) / 100000,
+            price: currentPrice ?? null,
+            ts: new Date(d + 'T00:00:00Z').getTime(),
+          })
+          written++
+        }
+      }
+
+      // Advance cumEquity — need all prices for non-patched segments too
+      // Read from Redis for segments we didn't just fetch
+      const exitDate = ROTATIONS[i + 1]?.date ?? END
+      if (segAsset !== 'usd') {
+        const exitPriceForAsset = (segAsset === asset)
+          ? (assetPrices[exitDate] ?? assetPrices[segEnd] ?? null)
+          : null
+
+        if (exitPriceForAsset && entryPrice) {
+          cumEquity = segStartEquity * (exitPriceForAsset / entryPrice)
+        } else if (segAsset !== asset) {
+          // Read terminal equity from Redis for this segment
+          const lastDay = segDates[segDates.length - 1]
+          const stored  = await redisHGet('rotation:daily', lastDay)
+          if (stored?.equity) cumEquity = stored.equity
+        }
+      }
+    }
+
+    return Response.json({
+      ok: true, mode: 'patch', asset,
+      days_written: written,
+      prices_fetched: Object.keys(assetPrices).length,
+      fetch_errors: fetchErrors,
+    })
+  }
+
+  // Full mode: compute entire equity curve and write all days
   let cumEquity = 1.0
   const dailyEntries = []
 
   for (let i = 0; i < ROTATIONS.length; i++) {
     const { date: segStart, asset } = ROTATIONS[i]
-    const segEnd = ROTATIONS[i + 1]?.date ?? END
+    const segEnd   = ROTATIONS[i + 1]?.date ?? END
     const segDates = dateRange(segStart, segEnd).filter(d => d <= END)
-
-    const entryPrice = asset !== 'usd' ? prices[asset]?.[segStart] ?? null : null
+    const assetPrices = prices[asset] ?? {}
+    const entryPrice  = asset !== 'usd' ? assetPrices[segStart] ?? null : null
     const segStartEquity = cumEquity
 
     for (const d of segDates) {
-      const currentPrice = asset !== 'usd' ? prices[asset]?.[d] ?? null : null
+      const currentPrice = asset !== 'usd' ? assetPrices[d] ?? null : null
       let equity = segStartEquity
-
       if (asset !== 'usd' && entryPrice && currentPrice) {
         equity = segStartEquity * (currentPrice / entryPrice)
       }
-
       dailyEntries.push({
-        date:   d,
-        asset,
+        date: d, asset,
         equity: Math.round(equity * 100000) / 100000,
         price:  currentPrice ?? null,
         ts:     new Date(d + 'T00:00:00Z').getTime(),
       })
     }
 
-    // Advance cumEquity to terminal value of this segment
     const exitDate  = ROTATIONS[i + 1]?.date ?? END
-    const exitPrice = asset !== 'usd' ? prices[asset]?.[exitDate] ?? prices[asset]?.[segEnd] ?? null : null
-
+    const exitPrice = asset !== 'usd' ? (assetPrices[exitDate] ?? assetPrices[segEnd] ?? null) : null
     if (asset !== 'usd' && entryPrice && exitPrice) {
       cumEquity = segStartEquity * (exitPrice / entryPrice)
     }
-    // USD segment: cumEquity stays flat
   }
 
-  // 4. Write rotation:daily hash
   let dailyOk = 0, dailyFail = 0
   for (const entry of dailyEntries) {
     const r = await redisHSet('rotation:daily', entry.date, entry)
     if (r?.result !== null) dailyOk++; else dailyFail++
   }
 
-  // 5. Write rotation:transitions hash
   let transOk = 0
   for (const { date, asset } of ROTATIONS) {
     await redisHSet('rotation:transitions', date, {
-      asset, date,
-      ts: new Date(date + 'T00:00:00Z').getTime(),
+      asset, date, ts: new Date(date + 'T00:00:00Z').getTime(),
     })
     transOk++
   }
 
-  const finalEquity = dailyEntries[dailyEntries.length - 1]?.equity ?? 1
-
   return Response.json({
-    ok: true,
-    daily_written:       dailyOk,
-    daily_failed:        dailyFail,
+    ok: true, mode: 'full',
+    daily_written: dailyOk, daily_failed: dailyFail,
     transitions_written: transOk,
-    fetch_errors:        fetchErrors,
-    final_equity:        finalEquity,
-    date_range:          { start: '2025-03-17', end: END },
-    assets_fetched:      Object.fromEntries(
+    fetch_errors: fetchErrors,
+    final_equity: dailyEntries[dailyEntries.length - 1]?.equity ?? 1,
+    assets_fetched: Object.fromEntries(
       Object.entries(prices).map(([k, v]) => [k, Object.keys(v).length])
     ),
   })
