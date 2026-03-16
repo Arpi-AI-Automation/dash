@@ -275,24 +275,43 @@ export default function RotationChart() {
   return (
     <div className="bg-[#0f172a] border border-gray-800 rounded-lg overflow-hidden">
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <span className="text-gray-400 font-mono text-sm">ASSET ROTATION</span>
-          {rotation && (
-            <span
-              className="px-2 py-0.5 rounded text-xs font-bold font-mono"
-              style={{ background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}44` }}
-            >
-              {assetLabel}
+      {/* Header: dominant asset + legend */}
+      <div className="px-4 pt-3 pb-2 border-b border-gray-800">
+        {/* Dominant asset callout */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-600 font-mono text-xs tracking-widest">HOLDING</span>
+            {rotation ? (
+              <span
+                className="px-3 py-1 text-sm font-bold font-mono rounded-sm"
+                style={{ background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55` }}
+              >
+                {assetLabel}
+              </span>
+            ) : (
+              <span className="text-gray-700 font-mono text-xs">awaiting webhook</span>
+            )}
+          </div>
+          {rotation?.updated_at && (
+            <span className="text-gray-700 text-xs font-mono">
+              {new Date(rotation.updated_at).toUTCString().slice(0, 16)}
             </span>
           )}
         </div>
-        {rotation?.updated_at && (
-          <span className="text-gray-600 text-xs font-mono">
-            {new Date(rotation.updated_at).toUTCString().slice(0, 22)}
-          </span>
-        )}
+        {/* Color legend */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1">
+          {ASSETS.map(a => (
+            <div key={a.key} className="flex items-center gap-1">
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
+                boxShadow: a.key === currentAsset ? `0 0 5px ${a.color}` : 'none',
+                opacity: a.key === currentAsset ? 1 : 0.5 }} />
+              <span className="font-mono text-[10px]"
+                style={{ color: a.key === currentAsset ? a.color : '#4b5563', fontWeight: a.key === currentAsset ? 700 : 400 }}>
+                {a.label}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Equity curve */}
