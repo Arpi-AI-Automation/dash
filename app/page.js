@@ -29,9 +29,15 @@ export default async function Home() {
               <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>BTC STRATEGY · ORPI1</div>
               <TvSignals />
             </div>
-            <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
-              <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>ASSET ROTATION</div>
-              <RotationChart />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px', flex: 1 }}>
+                <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>ASSET ROTATION</div>
+                <RotationChart />
+              </div>
+              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
+                <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>FEAR & GREED</div>
+                <FearGreed />
+              </div>
             </div>
           </div>
 
@@ -41,8 +47,7 @@ export default async function Home() {
           {/* CONTEXT */}
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px', marginTop: '32px' }}>
             <div style={{ fontSize: '9px', color: '#222', letterSpacing: '0.3em', marginBottom: '16px' }}>CONTEXT · MARKET CONDITIONS</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-              <FearGreed />
+            <div style={{ marginBottom: '24px' }}>
               <FundingRate />
             </div>
             <BtcComparison />
