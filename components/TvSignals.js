@@ -450,6 +450,7 @@ export default function TvSignals() {
             <div className="text-xs text-gray-500 uppercase tracking-wider">
               BTC Price + ORPI1 Equity Curve
             </div>
+            <div className="flex gap-3 text-xs text-gray-600">
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-400 rounded" /> Long</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-red-400 rounded" /> Short</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-indigo-400 rounded" /> L/S equity</span>
