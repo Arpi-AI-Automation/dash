@@ -79,7 +79,8 @@ const TV_TRANSITIONS_FALLBACK = [
 //
 // Dedup: Redis stores intraday updates — keep only the LAST entry per calendar day
 // (most recent price). This prevents compounding the same day's move multiple times.
-function CombinedChart({ history }) {
+function CombinedChart({ history, transitions }) {
+  const TV_TRANSITIONS = transitions?.length > 0 ? transitions : TV_TRANSITIONS_FALLBACK
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -579,7 +580,7 @@ export default function TvSignals() {
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-amber-400 rounded" /> Hold/Sell</span>
             </div>
           </div>
-          <CombinedChart history={btcHistory} />
+          <CombinedChart history={btcHistory} transitions={TV_TRANSITIONS} />
           <div className="text-xs text-gray-700 mt-2">
             Purple = Long/Short (captures both directions) · Amber = Hold/Sell (BTC when LONG, USD when SHORT) · dots = signal changes · no repaint (uses prev close signal)
           </div>
