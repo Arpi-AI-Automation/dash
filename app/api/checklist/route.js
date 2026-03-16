@@ -11,19 +11,10 @@ export const revalidate = 0
 //   ❌ Bybit taker ratio  — CVD proxy for condition 6
 //   ❌ Bybit account-ratio — liquidation imbalance proxy for condition 5
 
-async function getFundingRateAndOI() {
-  const res = await fetch(
-    'https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT',
-    { next: { revalidate: 0 } }
-  )
-  const json = await res.json()
-  const t = json.result?.list?.[0]
-  return {
-    fundingRate:       parseFloat(t?.fundingRate       ?? 0),
-    openInterestValue: parseFloat(t?.openInterestValue ?? 0),
-    markPrice:         parseFloat(t?.markPrice         ?? 0),
-    price24hPcnt:      parseFloat(t?.price24hPcnt      ?? 0),
-  }
+// Bybit ticker is Vercel-blocked — values passed from client via query params
+// This function is kept as a fallback stub only
+function getFundingRateAndOI_STUB() {
+  return { fundingRate: 0, openInterestValue: 0, markPrice: 0, price24hPcnt: 0 }
 }
 
 async function getFearGreed() {
@@ -213,15 +204,20 @@ export async function GET(request) {
     const takerBuyRatio  = searchParams.get('takerBuyRatio')  ? parseFloat(searchParams.get('takerBuyRatio'))  : null
     const lsLongRatio    = searchParams.get('lsLongRatio')    ? parseFloat(searchParams.get('lsLongRatio'))    : null
 
+    // Bybit ticker params from client (Vercel IP blocked server-side)
+    const fundingRate   = searchParams.get('fundingRate')   ? parseFloat(searchParams.get('fundingRate'))   : 0
+    const oiUsdParam    = searchParams.get('oiUsd')         ? parseFloat(searchParams.get('oiUsd'))         : 0
+    const price24hPcnt  = searchParams.get('price24hPcnt')  ? parseFloat(searchParams.get('price24hPcnt'))  : 0
+
+    const frOi = { fundingRate, openInterestValue: oiUsdParam, markPrice: 0, price24hPcnt }
+
     const settled = await Promise.allSettled([
-      getFundingRateAndOI(),
       getFearGreed(),
       getTpiSignal(),
     ])
-    const [frOiR, fgR, tpiR] = settled
-    const frOi      = frOiR.status === 'fulfilled' ? frOiR.value : { fundingRate: 0, openInterestValue: 0, markPrice: 0, price24hPcnt: 0 }
-    const fearGreed = fgR.status   === 'fulfilled' ? fgR.value  : null
-    const tpiSignal = tpiR.status  === 'fulfilled' ? tpiR.value : null
+    const [fgR, tpiR] = settled
+    const fearGreed = fgR.status  === 'fulfilled' ? fgR.value  : null
+    const tpiSignal = tpiR.status === 'fulfilled' ? tpiR.value : null
 
     return Response.json(buildChecklist({ frOi, fearGreed, tpiSignal, oiPrev, oiCurr, takerBuyRatio, lsLongRatio }))
   } catch (err) {
