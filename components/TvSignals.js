@@ -76,7 +76,16 @@ const TRADE_EXITS = [
 ]
 
 // ─── Combined BTC Price + Equity Curve (shared x-axis) ────────────
-function CombinedChart({ history, liveBtcPrice }) {
+// Two equity strategies drawn on the same panel:
+//   Curve A (purple) — Long/Short: LONG day gains, SHORT day gains both captured
+//   Curve B (amber)  — Hold/Sell:  LONG = hold BTC (capture move), SHORT = hold USD (flat)
+//
+// No-repaint rule: signal applied is prev.state (yesterday's confirmed close),
+// never cur.state (today's still-forming bar).
+//
+// Dedup: Redis stores intraday updates — keep only the LAST entry per calendar day
+// (most recent price). This prevents compounding the same day's move multiple times.
+function CombinedChart({ history }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
@@ -90,42 +99,52 @@ function CombinedChart({ history, liveBtcPrice }) {
     canvas.height = H * dpr
     ctx.scale(dpr, dpr)
 
-    // BTC price pts (newest-first → reverse)
-    const btcPts = [...history].reverse().filter(d => d.price > 0)
+    // ── 1. Deduplicate: one entry per calendar day (last = most recent intraday price) ──
+    const dayMap = {}
+    ;[...history].forEach(p => {
+      if (p.price <= 0) return
+      const day = new Date(p.ts).toISOString().slice(0, 10)
+      if (!dayMap[day] || p.ts > dayMap[day].ts) dayMap[day] = p
+    })
+    const btcPts = Object.keys(dayMap).sort().map(d => dayMap[d])
     if (btcPts.length < 2) return
 
-    // Compute equity directly from daily price changes + state
-    // LONG day: equity *= (1 + pct). SHORT day: equity *= (1 - pct)
-    // Moves every day with real BTC price, mirrors TV strategy exactly
-    const equityPts = [1.0]
+    // ── 2. Compute both equity curves ──
+    // Uses prev.state (signal confirmed at prev daily close) — no repaint
+    const eqLS   = [1.0]  // Long/Short: capture move in both directions
+    const eqHODL = [1.0]  // Hold/Sell:  capture move only when LONG, flat when SHORT
+
     for (let i = 1; i < btcPts.length; i++) {
       const prev = btcPts[i - 1], cur = btcPts[i]
       const pct = (cur.price - prev.price) / prev.price
-      equityPts.push(equityPts[equityPts.length - 1] * (1 + (prev.state === 'LONG' ? pct : -pct)))
+
+      // Curve A: Long/Short — gain when LONG (price up) OR SHORT (price down)
+      const prevLS = eqLS[eqLS.length - 1]
+      eqLS.push(prevLS * (1 + (prev.state === 'LONG' ? pct : -pct)))
+
+      // Curve B: Hold/Sell — gain when LONG (hold BTC), flat when SHORT (in USD)
+      const prevHODL = eqHODL[eqHODL.length - 1]
+      eqHODL.push(prev.state === 'LONG' ? prevHODL * (1 + pct) : prevHODL)
     }
 
-    const validEquity = equityPts
-    if (validEquity.length === 0) return
-
-    // Layout: top 60% = BTC price, bottom 40% = equity curve
-    // Shared x-axis
-    const pad = { t: 8, r: 52, b: 20, l: 60 }
-    const splitY = Math.floor(H * 0.58) // divider between charts
-    const cw = W - pad.l - pad.r
-    const priceCh = splitY - pad.t - 4   // price chart height
-    const equityCh = H - splitY - pad.b  // equity chart height
+    // ── 3. Layout ──
+    const pad = { t: 8, r: 56, b: 20, l: 60 }
+    const splitY = Math.floor(H * 0.58)
+    const cw     = W - pad.l - pad.r
+    const priceCh  = splitY - pad.t - 4
+    const equityCh = H - splitY - pad.b
 
     ctx.clearRect(0, 0, W, H)
 
-    // ── BTC Price chart (top) ──
+    // ── 4. BTC Price chart (top) ──
     const prices = btcPts.map(d => d.price)
     const minP = Math.min(...prices), maxP = Math.max(...prices)
     const rangeP = maxP - minP || 1
 
-    const pX = (i) => pad.l + (cw * i) / (btcPts.length - 1)
-    const pY = (price) => pad.t + priceCh - (priceCh * (price - minP)) / rangeP
+    const pX = i => pad.l + (cw * i) / (btcPts.length - 1)
+    const pY = p => pad.t + priceCh - (priceCh * (p - minP)) / rangeP
 
-    // Price grid
+    // Grid
     ctx.font = '9px monospace'; ctx.textAlign = 'right'
     for (let i = 0; i <= 3; i++) {
       const v = minP + (rangeP * i) / 3
@@ -136,37 +155,36 @@ function CombinedChart({ history, liveBtcPrice }) {
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
     }
 
-    // Price line (state-coloured)
+    // Coloured price line
     ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
     for (let i = 1; i < btcPts.length; i++) {
       ctx.strokeStyle = stateColor(btcPts[i].state)
       ctx.beginPath()
       ctx.moveTo(pX(i - 1), pY(btcPts[i - 1].price))
-      ctx.lineTo(pX(i), pY(btcPts[i].price))
+      ctx.lineTo(pX(i),     pY(btcPts[i].price))
       ctx.stroke()
     }
 
     // Divider
-    ctx.strokeStyle = '#374151'; ctx.lineWidth = 1
-    ctx.setLineDash([3, 3])
+    ctx.strokeStyle = '#374151'; ctx.lineWidth = 1; ctx.setLineDash([3, 3])
     ctx.beginPath(); ctx.moveTo(pad.l, splitY); ctx.lineTo(pad.l + cw, splitY); ctx.stroke()
     ctx.setLineDash([])
 
-    // ── Equity curve (bottom) ──
-    const minE = Math.min(...validEquity), maxE = Math.max(...validEquity)
+    // ── 5. Equity panel (bottom) — shared scale across both curves ──
+    const allEq  = [...eqLS, ...eqHODL]
+    const minE   = Math.min(...allEq), maxE = Math.max(...allEq)
     const rangeE = maxE - minE || 0.01
 
-    const eX = (i) => pad.l + (cw * i) / (equityPts.length - 1)
-    const eY = (v) => splitY + 4 + equityCh - (equityCh * (v - minE)) / rangeE
+    const eX = i  => pad.l + (cw * i) / (btcPts.length - 1)
+    const eY = v  => splitY + 4 + equityCh - (equityCh * (v - minE)) / rangeE
 
-    // 1.0 baseline
-    const baselineY = eY(Math.max(minE, Math.min(maxE, 1.0)))
-    ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5
-    ctx.setLineDash([3, 3])
-    ctx.beginPath(); ctx.moveTo(pad.l, baselineY); ctx.lineTo(pad.l + cw, baselineY); ctx.stroke()
+    // Baseline 1.0
+    const byY = eY(Math.max(minE, Math.min(maxE, 1.0)))
+    ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5; ctx.setLineDash([3, 3])
+    ctx.beginPath(); ctx.moveTo(pad.l, byY); ctx.lineTo(pad.l + cw, byY); ctx.stroke()
     ctx.setLineDash([])
 
-    // Equity grid + right y-axis labels
+    // Y-axis labels (right side)
     ctx.font = '9px monospace'; ctx.textAlign = 'left'
     for (let i = 0; i <= 3; i++) {
       const v = minE + (rangeE * i) / 3
@@ -175,58 +193,62 @@ function CombinedChart({ history, liveBtcPrice }) {
       ctx.fillText(`${v.toFixed(2)}x`, pad.l + cw + 4, y + 3)
     }
 
-    // Gradient fill under equity curve
-    const grad = ctx.createLinearGradient(0, splitY + 4, 0, H - pad.b)
-    grad.addColorStop(0, 'rgba(129,140,248,0.2)')
-    grad.addColorStop(1, 'rgba(0,0,0,0)')
-    ctx.beginPath()
-    equityPts.forEach((v, i) => { i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)) })
-    ctx.lineTo(eX(equityPts.length - 1), H - pad.b)
-    ctx.lineTo(pad.l, H - pad.b)
-    ctx.closePath(); ctx.fillStyle = grad; ctx.fill()
-
-    // Equity line
-    ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
-    for (let i = 1; i < equityPts.length; i++) {
-      const prev = equityPts[i - 1], cur = equityPts[i]
-      ctx.strokeStyle = (prev >= 1.0 && cur >= 1.0) ? '#818cf8'
-        : (prev < 1.0 && cur < 1.0) ? '#f87171' : '#818cf8'
-      ctx.beginPath(); ctx.moveTo(eX(i - 1), eY(prev)); ctx.lineTo(eX(i), eY(cur)); ctx.stroke()
+    // Draw helper: filled area + line for a curve
+    const drawCurve = (pts, lineColor, fillColor) => {
+      // Fill
+      ctx.beginPath()
+      pts.forEach((v, i) => { i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)) })
+      ctx.lineTo(eX(pts.length - 1), splitY + 4 + equityCh)
+      ctx.lineTo(pad.l, splitY + 4 + equityCh)
+      ctx.closePath()
+      ctx.fillStyle = fillColor
+      ctx.fill()
+      // Line
+      ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
+      ctx.beginPath()
+      pts.forEach((v, i) => { i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)) })
+      ctx.stroke()
     }
 
-    // Trade exit dots: mark signal-change days on equity curve
+    // Curve B (amber, Hold/Sell) — draw first so purple sits on top
+    drawCurve(eqHODL, '#f59e0b', 'rgba(245,158,11,0.08)')
+    // Curve A (purple, Long/Short)
+    drawCurve(eqLS,   '#818cf8', 'rgba(129,140,248,0.12)')
+
+    // Signal-change dots on both curves
     TRADE_EXITS.forEach(exit => {
       const idx = btcPts.findIndex(p => new Date(p.ts).toISOString().slice(0, 10) === exit.date)
-      if (idx >= 0 && equityPts[idx] !== null) {
-        const x = eX(idx), y = eY(equityPts[idx])
-        ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2)
-        ctx.fillStyle = equityPts[idx] >= 1.0 ? '#818cf8' : '#f87171'
-        ctx.fill()
-      }
+      if (idx < 0) return
+      ;[[eqLS, '#818cf8'], [eqHODL, '#f59e0b']].forEach(([pts, col]) => {
+        ctx.beginPath(); ctx.arc(eX(idx), eY(pts[idx]), 2.5, 0, Math.PI * 2)
+        ctx.fillStyle = col; ctx.fill()
+      })
     })
 
-    // Final equity value label
-    const lastEq = equityPts[equityPts.length - 1]
-    const lastX = eX(equityPts.length - 1)
-    const lastY = eY(lastEq)
-    ctx.fillStyle = lastEq >= 1.0 ? '#818cf8' : '#f87171'
-    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left'
-    ctx.fillText(`${lastEq.toFixed(3)}x`, lastX + 2, lastY - 2)
+    // End-of-curve labels
+    const lastLS   = eqLS[eqLS.length - 1]
+    const lastHODL = eqHODL[eqHODL.length - 1]
+    const lastX    = eX(btcPts.length - 1)
+    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'right'
+    ctx.fillStyle = '#818cf8'
+    ctx.fillText(`${lastLS.toFixed(3)}x`, lastX - 2, eY(lastLS) - 4)
+    ctx.fillStyle = '#f59e0b'
+    ctx.fillText(`${lastHODL.toFixed(3)}x`, lastX - 2, eY(lastHODL) + 12)
 
-    // ── Shared x-axis labels (bottom) ──
+    // ── 6. Shared x-axis labels ──
     ctx.fillStyle = '#6b7280'; ctx.font = '9px monospace'; ctx.textAlign = 'center'
     ;[0, Math.floor((btcPts.length - 1) / 2), btcPts.length - 1].forEach(i => {
       const d = new Date(btcPts[i].ts)
-      const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
-      ctx.fillText(label, pX(i), H - 4)
+      ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`, pX(i), H - 4)
     })
 
-  }, [history, liveBtcPrice])
+  }, [history])
 
   return (
     <canvas ref={canvasRef} className="w-full" style={{ height: 320, display: 'block' }} />
   )
 }
+
 
 // ─── Rotation Badge ───────────────────────────────────────────────
 const ASSET_COLORS = {
@@ -428,15 +450,15 @@ export default function TvSignals() {
             <div className="text-xs text-gray-500 uppercase tracking-wider">
               BTC Price + ORPI1 Equity Curve
             </div>
-            <div className="flex gap-3 text-xs text-gray-600">
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-400 rounded" /> Long</span>
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-red-400 rounded" /> Short</span>
-              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-indigo-400 rounded" /> Equity</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-indigo-400 rounded" /> L/S equity</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-amber-400 rounded" /> Hold/Sell</span>
             </div>
           </div>
-          <CombinedChart history={btcHistory} liveBtcPrice={btc?.price || 0} />
+          <CombinedChart history={btcHistory} />
           <div className="text-xs text-gray-700 mt-2">
-            Equity normalized to 1.0 at chart start · 80 trades since 2018 · dots = signal changes · live endpoint interpolated from current BTC price
+            Purple = Long/Short (captures both directions) · Amber = Hold/Sell (BTC when LONG, USD when SHORT) · dots = signal changes · no repaint (uses prev close signal)
           </div>
         </div>
       )}
