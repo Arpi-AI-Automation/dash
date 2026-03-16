@@ -5,6 +5,7 @@ import FearGreed from '../components/FearGreed'
 import FundingRate from '../components/FundingRate'
 import LongShortRatio from '../components/LongShortRatio'
 import DecisionChecklist from '../components/DecisionChecklist'
+import ChecklistBacktest from '../components/ChecklistBacktest'
 import TvSignals from '../components/TvSignals'
 import RotationChart from '../components/RotationChart'
 
@@ -96,6 +97,7 @@ export default async function Home() {
         </div>
 
         <DecisionChecklist />
+        <ChecklistBacktest />
       </main>
     </div>
   )
