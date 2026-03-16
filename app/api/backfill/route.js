@@ -42,10 +42,11 @@ export async function GET(request) {
     // 3. Write each to btc:daily hash
     let ok = 0, fail = 0, errors = []
     for (const [date, entry] of entries) {
-      const res = await fetch(`${REDIS_URL}/hset/btc%3Adaily`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify([date, JSON.stringify(entry)]),
+      const f   = encodeURIComponent(date)
+      const v   = encodeURIComponent(JSON.stringify(entry))
+      const res = await fetch(`${REDIS_URL}/hset/btc%3Adaily/${f}/${v}`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
       })
       const j = await res.json()
       if (j.error) { fail++; errors.push({ date, error: j.error }) }
