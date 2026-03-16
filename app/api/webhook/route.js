@@ -129,17 +129,61 @@ export async function POST(request) {
     }
 
     if (script === 'rotation') {
+      // Scores for each asset (0-6 each, from the relative strength matrix)
+      const scores = {
+        bnb:  parseInt(body.bnb_score)  || 0,
+        eth:  parseInt(body.eth_score)  || 0,
+        sol:  parseInt(body.sol_score)  || 0,
+        xrp:  parseInt(body.xrp_score)  || 0,
+        paxg: parseInt(body.paxg_score) || 0,
+        sui:  parseInt(body.sui_score)  || 0,
+        usd:  parseInt(body.usd_score)  || 0,
+      }
+
       const signal = {
-        asset:      asset      || 'USD',
+        asset:      asset || 'USD',
         prev_asset: prev_asset || null,
+        scores,
         ts:         timestamp,
         updated_at: new Date().toISOString(),
       }
-      await redisSet('signal:rotation', signal)
-      await redisPush('history:rotation', {
-        asset: signal.asset, prev_asset: signal.prev_asset, ts: signal.ts,
+
+      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
+
+      const dailyEntry = {
+        asset:  signal.asset,
+        scores: signal.scores,
+        ts:     timestamp,
+        date:   dateKey,
+      }
+
+      // Detect rotation (asset change) → write to transitions hash
+      const prevRotation = await redisGet('signal:rotation')
+      const isRotation = !prevRotation || prevRotation.asset !== signal.asset
+
+      const writes = [
+        redisSet('signal:rotation', signal),
+        redisHSet('rotation:daily', dateKey, dailyEntry),
+        redisPush('history:rotation', {
+          asset: signal.asset, prev_asset: signal.prev_asset,
+          scores, ts: signal.ts,
+        }),
+      ]
+
+      if (isRotation) {
+        writes.push(redisHSet('rotation:transitions', dateKey, {
+          asset: signal.asset,
+          date:  dateKey,
+          ts:    timestamp,
+        }))
+      }
+
+      await Promise.all(writes)
+
+      return Response.json({
+        ok: true, script: 'rotation', asset: signal.asset,
+        date: dateKey, rotation: isRotation,
       })
-      return Response.json({ ok: true, script: 'rotation', asset })
     }
 
     return Response.json({ error: 'Unknown script type' }, { status: 400 })
