@@ -110,7 +110,7 @@ function BtcPriceChart({ history }) {
     const labelIdxs = [0, Math.floor((pts.length - 1) / 2), pts.length - 1]
     labelIdxs.forEach((i) => {
       const d = new Date(pts[i].ts)
-      const label = `${d.getMonth() + 1}/${d.getDate()}`
+      const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
       const x = pad.l + (cw * i) / (pts.length - 1)
       ctx.fillText(label, x, H - 4)
     })
@@ -238,7 +238,7 @@ function EquityCurve({ history }) {
     const labelIdxs = [0, Math.floor((pts.length - 1) / 2), pts.length - 1]
     labelIdxs.forEach((i) => {
       const d = new Date(pts[i].ts)
-      const label = `${d.getMonth() + 1}/${d.getDate()}`
+      const label = `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`
       const x = pad.l + (cw * i) / (pts.length - 1)
       ctx.fillText(label, x, H - 4)
     })

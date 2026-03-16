@@ -238,7 +238,7 @@ export default function FearGreed() {
     setBtcLoading(true)
     try {
       const res  = await fetch(
-        'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=max&interval=daily',
+        'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365&interval=daily',
         { cache: 'no-store' }
       )
       if (!res.ok) throw new Error('CG ' + res.status)
