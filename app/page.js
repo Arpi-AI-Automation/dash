@@ -1,98 +1,117 @@
-'use client'
-import { useEffect, useState, useRef } from 'react'
+import Nav from '../components/Nav'
+import CryptoTicker from '../components/CryptoTicker'
+import SidebarMarkets from '../components/SidebarMarkets'
+import TvSignals from '../components/TvSignals'
+import RotationChart from '../components/RotationChart'
+import DecisionChecklist from '../components/DecisionChecklist'
+import ChecklistBacktest from '../components/ChecklistBacktest'
+import FearGreed from '../components/FearGreed'
+import FundingRate from '../components/FundingRate'
+import BtcComparison from '../components/BtcComparison'
 
-const COINS = [
-  { id: 'bitcoin',     symbol: 'BTC',  name: 'Bitcoin'     },
-  { id: 'ethereum',    symbol: 'ETH',  name: 'Ethereum'    },
-  { id: 'solana',      symbol: 'SOL',  name: 'Solana'      },
-  { id: 'sui',         symbol: 'SUI',  name: 'Sui'         },
-  { id: 'ripple',      symbol: 'XRP',  name: 'XRP'         },
-  { id: 'binancecoin', symbol: 'BNB',  name: 'BNB'         },
-  { id: 'aave',        symbol: 'AAVE', name: 'Aave'        },
-  { id: 'dogecoin',    symbol: 'DOGE', name: 'Dogecoin'    },
-  { id: 'hyperliquid', symbol: 'HYPE', name: 'Hyperliquid' },
-  { id: 'pax-gold',    symbol: 'PAXG', name: 'PAX Gold'    },
-  { id: 'monero',      symbol: 'XMR',  name: 'Monero'      },
-]
+export const dynamic = 'force-dynamic'
 
-function TickerItem({ symbol, price, change }) {
-  const up = change >= 0
-  return (
-    <span className="inline-flex items-center gap-2 px-5 border-r border-[#111] whitespace-nowrap">
-      <span className="text-[10px] font-bold tracking-widest text-[#666]">{symbol}</span>
-      <span className="text-[11px] font-bold text-[#e8e8e8]">
-        ${price < 1 ? price.toFixed(4) : price < 100 ? price.toFixed(2) : price.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-      </span>
-      <span className="text-[10px] font-bold" style={{ color: up ? '#22c55e' : '#ef4444' }}>
-        {up ? '+' : ''}{change.toFixed(2)}%
-      </span>
-    </span>
-  )
+async function getBtcSignal() {
+  try {
+    const url   = process.env.UPSTASH_REDIS_REST_URL
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN
+    if (!url || !token) return null
+    const res    = await fetch(`${url}/get/signal:btc`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    })
+    const data   = await res.json()
+    if (!data.result) return null
+    const parsed = typeof data.result === 'string' ? JSON.parse(data.result) : data.result
+    return typeof parsed === 'string' ? JSON.parse(parsed) : parsed
+  } catch { return null }
 }
 
-export default function CryptoTicker() {
-  const [prices, setPrices]   = useState({})
-  const [loading, setLoading] = useState(true)
-  const trackRef = useRef(null)
-
-  const fetchPrices = async () => {
-    try {
-      const ids = COINS.map(c => c.id).join(',')
-      const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
-        { cache: 'no-store' }
-      )
-      const data = await res.json()
-      setPrices(data)
-      setLoading(false)
-    } catch {}
-  }
-
-  useEffect(() => {
-    fetchPrices()
-    const iv = setInterval(fetchPrices, 60000)
-    return () => clearInterval(iv)
-  }, [])
-
-  const items = COINS.filter(c => prices[c.id]).map(c => ({
-    ...c,
-    price:  prices[c.id]?.usd ?? 0,
-    change: prices[c.id]?.usd_24h_change ?? 0,
-  }))
-
-  // Duplicate for seamless loop
-  const display = [...items, ...items]
+export default async function Home() {
+  const btcSignal  = await getBtcSignal()
+  const stateColor = (s) => s?.includes('LONG') ? '#22c55e' : s?.includes('SHORT') ? '#ef4444' : '#555'
+  const fmt2       = (v)  => v == null ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}`
+  const signalColor = stateColor(btcSignal?.state)
 
   return (
-    <div className="w-full bg-[#060606] border-b border-[#111] overflow-hidden relative h-9 flex items-center">
-      {/* fade edges */}
-      <div className="absolute left-0 top-0 bottom-0 w-12 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to right, #060606, transparent)' }} />
-      <div className="absolute right-0 top-0 bottom-0 w-12 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to left, #060606, transparent)' }} />
+    <div className="min-h-screen bg-[#080808] text-[#e8e8e8]">
+      {/* ── TICKER BAR ─────────────────────────────────── */}
+      <CryptoTicker />
 
-      {loading ? (
-        <div className="text-[10px] text-[#333] tracking-widest px-5">LOADING MARKETS...</div>
-      ) : (
-        <div className="ticker-track flex" ref={trackRef}>
-          {display.map((coin, i) => (
-            <TickerItem key={`${coin.id}-${i}`} symbol={coin.symbol} price={coin.price} change={coin.change} />
-          ))}
+      {/* ── NAV ────────────────────────────────────────── */}
+      <Nav />
+
+      {/* ── BODY: main + right sidebar ─────────────────── */}
+      <div style={{ display: 'flex', minHeight: '100vh' }}>
+
+        {/* ── MAIN COLUMN ──────────────────────────────── */}
+        <div style={{ flex: 1, minWidth: 0, padding: '24px 20px 80px' }}>
+
+          {/* HEADER */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #111' }}>
+            <div>
+              <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.3em', marginBottom: '2px' }}>COMMAND CENTER</div>
+              <h1 style={{ fontSize: '20px', letterSpacing: '0.2em', fontWeight: 700, margin: 0 }}>
+                ARPI <span style={{ color: '#f7931a' }}>OS</span>
+              </h1>
+            </div>
+            {btcSignal ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '11px', fontFamily: 'monospace' }}>
+                <span style={{ color: '#333', letterSpacing: '0.1em' }}>ORPI1</span>
+                <span style={{ fontWeight: 700, padding: '2px 10px', borderRadius: '2px', fontSize: '10px', letterSpacing: '0.1em', background: signalColor + '22', color: signalColor, border: `1px solid ${signalColor}44` }}>
+                  {btcSignal.state}
+                </span>
+                <span style={{ color: '#444' }}>
+                  TPI <span style={{ fontWeight: 700, color: signalColor }}>{fmt2(btcSignal.tpi)}</span>
+                </span>
+                <span style={{ color: '#444' }}>
+                  RoC <span style={{ fontWeight: 700, color: (btcSignal.roc ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>{fmt2(btcSignal.roc)}</span>
+                </span>
+              </div>
+            ) : (
+              <div style={{ fontSize: '10px', color: '#333', border: '1px solid #1a1a1a', padding: '6px 12px', letterSpacing: '0.1em' }}>
+                ORPI1 — awaiting signal
+              </div>
+            )}
+          </div>
+
+          {/* SIGNAL ROW: BTC strat + Asset rotation */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
+              <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>BTC STRATEGY · ORPI1</div>
+              <TvSignals />
+            </div>
+            <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
+              <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>ASSET ROTATION</div>
+              <RotationChart />
+            </div>
+          </div>
+
+          {/* DECISION CHECKLIST */}
+          <DecisionChecklist />
+
+          {/* CONTEXT DIVIDER */}
+          <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px', marginTop: '32px' }}>
+            <div style={{ fontSize: '9px', color: '#222', letterSpacing: '0.3em', marginBottom: '16px' }}>CONTEXT · MARKET CONDITIONS</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+              <FearGreed />
+              <FundingRate />
+            </div>
+            <BtcComparison />
+          </div>
+
+          {/* BACKTEST */}
+          <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px', marginTop: '32px' }}>
+            <ChecklistBacktest />
+          </div>
         </div>
-      )}
 
-      <style>{`
-        .ticker-track {
-          animation: ticker-scroll 60s linear infinite;
-        }
-        .ticker-track:hover {
-          animation-play-state: paused;
-        }
-        @keyframes ticker-scroll {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-      `}</style>
+        {/* ── RIGHT SIDEBAR ─────────────────────────────── */}
+        <div style={{ width: '200px', flexShrink: 0, borderLeft: '1px solid #111', padding: '24px 16px 80px', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
+          <SidebarMarkets />
+        </div>
+
+      </div>
     </div>
   )
 }
