@@ -4,19 +4,15 @@ import SectionHeader from './SectionHeader'
 
 function ConditionRow({ label, pass, value, detail }) {
   const isNull = pass === null || pass === undefined
-
   const icon = isNull ? '—' : pass ? '✓' : '✗'
   const iconColor = isNull ? '#444' : pass ? '#22c55e' : '#ef4444'
   const labelColor = pass ? '#e8e8e8' : isNull ? '#555' : '#666'
 
   return (
     <div className={`flex gap-3 py-2.5 border-b border-[#111] last:border-0 ${pass ? '' : 'opacity-70'}`}>
-      {/* Icon */}
       <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mt-0.5">
         <span className="text-sm font-bold" style={{ color: iconColor }}>{icon}</span>
       </div>
-
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-semibold tracking-wide" style={{ color: labelColor }}>
@@ -39,7 +35,6 @@ function ScoreBadge({ score, total, side }) {
   const color = side === 'long'
     ? ratio >= 0.66 ? '#22c55e' : ratio >= 0.33 ? '#eab308' : '#555'
     : ratio >= 0.66 ? '#ef4444' : ratio >= 0.33 ? '#eab308' : '#555'
-
   return (
     <span className="text-sm font-mono font-bold" style={{ color }}>
       {score}/{total} ✓
@@ -50,21 +45,96 @@ function ScoreBadge({ score, total, side }) {
 function SummaryBox({ score, total, side }) {
   const ratio = score / total
   let msg, color
-
   if (side === 'long') {
     if (ratio >= 0.83)     { msg = `Strong LONG signal (${score}/${total}) — conditions met for entry`; color = '#22c55e' }
-    else if (ratio >= 0.5) { msg = `Partial conditions (${score}/${total}) — wait for more confluence before acting`; color = '#eab308' }
+    else if (ratio >= 0.5) { msg = `Partial conditions (${score}/${total}) — wait for more confluence`; color = '#eab308' }
     else                   { msg = `Weak conditions (${score}/${total}) — not the time for a LONG`; color = '#555' }
   } else {
     if (ratio >= 0.83)     { msg = `Strong SHORT signal (${score}/${total}) — conditions met for entry`; color = '#ef4444' }
-    else if (ratio >= 0.5) { msg = `Partial conditions (${score}/${total}) — wait for more confluence before acting`; color = '#eab308' }
+    else if (ratio >= 0.5) { msg = `Partial conditions (${score}/${total}) — wait for more confluence`; color = '#eab308' }
     else                   { msg = `Weak conditions (${score}/${total}) — not the time for a SHORT`; color = '#555' }
   }
-
   return (
     <div className="mt-4 p-3 border rounded-sm text-xs tracking-wide"
       style={{ borderColor: color + '44', background: color + '0d', color }}>
       {ratio >= 0.5 ? '⚠ ' : '● '}{msg}
+    </div>
+  )
+}
+
+function LeverageVerdict({ verdict, btcSignal, longScore, shortScore, total }) {
+  if (!verdict && !btcSignal) {
+    return (
+      <div className="mt-6 p-4 border border-[#1a1a1a] rounded-sm">
+        <div className="text-[10px] text-[#333] tracking-widest mb-1">LEVERAGE VERDICT</div>
+        <div className="text-xs text-[#444]">BTC strategy signal unavailable — connect webhook to enable</div>
+      </div>
+    )
+  }
+
+  const { action, label, color, detail } = verdict
+
+  // Action-specific icon
+  const icon = {
+    LEVERAGE_OK:  '⚡',
+    SPOT_ONLY:    '●',
+    REDUCE:       '▼',
+    SHORT_OK:     '⚡',
+    LIGHT_SHORT:  '●',
+    HOLD_SHORT:   '◆',
+    CONFLICT:     '⚠',
+  }[action] ?? '●'
+
+  // Score bars
+  const longPct  = Math.round((longScore  / total) * 100)
+  const shortPct = Math.round((shortScore / total) * 100)
+
+  return (
+    <div className="mt-6 border rounded-sm overflow-hidden" style={{ borderColor: color + '33' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-3 border-b"
+        style={{ borderColor: color + '22', background: color + '0a' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-bold tracking-widest" style={{ color: color + 'aa' }}>
+            LEVERAGE VERDICT
+          </span>
+        </div>
+        <span className="text-[10px] font-mono px-2 py-0.5 rounded-sm border"
+          style={{ borderColor: color + '44', color: color + 'cc', background: color + '11' }}>
+          BTC STRAT: {btcSignal}
+        </span>
+      </div>
+
+      {/* Main verdict */}
+      <div className="px-5 py-4">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-xl">{icon}</span>
+          <span className="text-sm font-bold tracking-wide" style={{ color }}>
+            {label}
+          </span>
+        </div>
+        <div className="text-[11px] text-[#555] leading-relaxed mb-4">{detail}</div>
+
+        {/* Score bars */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-[#444] w-10 text-right font-mono">LONG</span>
+            <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${longPct}%`, background: '#22c55e' }} />
+            </div>
+            <span className="text-[10px] font-mono text-[#444] w-8">{longScore}/{total}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] text-[#444] w-10 text-right font-mono">SHORT</span>
+            <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${shortPct}%`, background: '#ef4444' }} />
+            </div>
+            <span className="text-[10px] font-mono text-[#444] w-8">{shortScore}/{total}</span>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -92,11 +162,11 @@ export default function DecisionChecklist() {
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 5 * 60 * 1000) // every 5 min
+    const interval = setInterval(fetchData, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const biasColor = data?.bias === 'LONG' ? '#22c55e'
+  const biasColor = data?.bias === 'LONG'  ? '#22c55e'
     : data?.bias === 'SHORT' ? '#ef4444'
     : '#eab308'
 
@@ -117,62 +187,67 @@ export default function DecisionChecklist() {
       </div>
 
       {loading && (
-        <div className="text-[#555] text-xs tracking-widest py-4">
-          CALCULATING<span className="cursor" />
-        </div>
+        <div className="text-[#555] text-xs tracking-widest py-4">CALCULATING...</div>
       )}
       {error && <div className="text-red-500 text-xs py-2">ERR: {error}</div>}
 
       {!loading && !error && data && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-          {/* LONG side */}
-          <div className="border border-[#1a2a1a] bg-[#0a0d0a] rounded-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[#1a2a1a]">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-xs font-bold tracking-widest text-green-400">LONG CONDITIONS</span>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* LONG side */}
+            <div className="border border-[#1a2a1a] bg-[#0a0d0a] rounded-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#1a2a1a]">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-green-500" />
+                  <span className="text-xs font-bold tracking-widest text-green-400">LONG CONDITIONS</span>
+                </div>
+                <ScoreBadge score={data.longScore} total={data.total} side="long" />
               </div>
-              <ScoreBadge score={data.longScore} total={data.total} side="long" />
+              <div className="px-5 py-2">
+                {data.longConditions.map(c => (
+                  <ConditionRow key={c.id} {...c} />
+                ))}
+              </div>
+              <div className="px-5 pb-4">
+                <SummaryBox score={data.longScore} total={data.total} side="long" />
+              </div>
             </div>
 
-            <div className="px-5 py-2">
-              {data.longConditions.map(c => (
-                <ConditionRow key={c.id} {...c} />
-              ))}
-            </div>
-
-            <div className="px-5 pb-4">
-              <SummaryBox score={data.longScore} total={data.total} side="long" />
+            {/* SHORT side */}
+            <div className="border border-[#2a1a1a] bg-[#0d0a0a] rounded-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-[#2a1a1a]">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-red-500" />
+                  <span className="text-xs font-bold tracking-widest text-red-400">SHORT CONDITIONS</span>
+                </div>
+                <ScoreBadge score={data.shortScore} total={data.total} side="short" />
+              </div>
+              <div className="px-5 py-2">
+                {data.shortConditions.map(c => (
+                  <ConditionRow key={c.id} {...c} />
+                ))}
+              </div>
+              <div className="px-5 pb-4">
+                <SummaryBox score={data.shortScore} total={data.total} side="short" />
+              </div>
             </div>
           </div>
 
-          {/* SHORT side */}
-          <div className="border border-[#2a1a1a] bg-[#0d0a0a] rounded-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-[#2a1a1a]">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-red-500" />
-                <span className="text-xs font-bold tracking-widest text-red-400">SHORT CONDITIONS</span>
-              </div>
-              <ScoreBadge score={data.shortScore} total={data.total} side="short" />
-            </div>
-
-            <div className="px-5 py-2">
-              {data.shortConditions.map(c => (
-                <ConditionRow key={c.id} {...c} />
-              ))}
-            </div>
-
-            <div className="px-5 pb-4">
-              <SummaryBox score={data.shortScore} total={data.total} side="short" />
-            </div>
-          </div>
-        </div>
+          {/* Leverage Verdict — full width below */}
+          <LeverageVerdict
+            verdict={data.leverageVerdict}
+            btcSignal={data.btcSignal}
+            longScore={data.longScore}
+            shortScore={data.shortScore}
+            total={data.total}
+          />
+        </>
       )}
 
       {!loading && !error && data && (
         <div className="mt-2 text-[10px] text-[#2a2a2a] tracking-widest">
           LAST UPDATE {lastUpdated?.toLocaleTimeString('en-US', { hour12: false })} · REFRESHES EVERY 5 MIN
+          {data.meta?.lsSource && ` · L/S: ${data.meta.lsSource.toUpperCase()}`}
         </div>
       )}
     </div>
