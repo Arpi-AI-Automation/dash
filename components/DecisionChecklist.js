@@ -2,22 +2,30 @@
 import { useEffect, useState, useCallback } from 'react'
 import SectionHeader from './SectionHeader'
 
-// Client-side fetches (Vercel IP blocked)
+// ALL Bybit endpoints are Vercel IP blocked — fetch everything client-side
 async function fetchClientData() {
-  const [oiRes, takerRes, lsRes] = await Promise.allSettled([
-    // Daily OI: need 2 days to compute delta
+  const [tickerRes, oiRes, takerRes, lsRes] = await Promise.allSettled([
+    fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT'),
     fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=2'),
-    // Taker buy/sell ratio — daily period
     fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1d&limit=1'),
-    // L/S account ratio
     fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1h&limit=1'),
   ])
+
+  let fundingRate = null, oiUsd = null, price24hPcnt = null
+  if (tickerRes.status === 'fulfilled') {
+    const d = await tickerRes.value.json()
+    const t = d.result?.list?.[0]
+    if (t) {
+      fundingRate  = parseFloat(t.fundingRate)
+      oiUsd        = parseFloat(t.openInterestValue)
+      price24hPcnt = parseFloat(t.price24hPcnt)
+    }
+  }
 
   let oiPrev = null, oiCurr = null
   if (oiRes.status === 'fulfilled') {
     const d = await oiRes.value.json()
     const list = d.result?.list ?? []
-    // list[0] = most recent, list[1] = previous day
     if (list.length >= 2) {
       oiCurr = parseFloat(list[0].openInterest)
       oiPrev = parseFloat(list[1].openInterest)
@@ -38,7 +46,7 @@ async function fetchClientData() {
     if (row) lsLongRatio = parseFloat(row.buyRatio) * 100
   }
 
-  return { oiPrev, oiCurr, takerBuyRatio, lsLongRatio }
+  return { fundingRate, oiUsd, price24hPcnt, oiPrev, oiCurr, takerBuyRatio, lsLongRatio }
 }
 
 function ConditionRow({ label, pass, value, detail }) {
@@ -140,12 +148,15 @@ export default function DecisionChecklist() {
 
   const fetchData = useCallback(async () => {
     try {
-      const { oiPrev, oiCurr, takerBuyRatio, lsLongRatio } = await fetchClientData()
+      const { fundingRate, oiUsd, price24hPcnt, oiPrev, oiCurr, takerBuyRatio, lsLongRatio } = await fetchClientData()
       const params = new URLSearchParams()
-      if (oiPrev      !== null) params.set('oiPrev',        oiPrev.toFixed(2))
-      if (oiCurr      !== null) params.set('oiCurr',        oiCurr.toFixed(2))
+      if (fundingRate   !== null) params.set('fundingRate',   fundingRate.toFixed(8))
+      if (oiUsd         !== null) params.set('oiUsd',         oiUsd.toFixed(2))
+      if (price24hPcnt  !== null) params.set('price24hPcnt',  price24hPcnt.toFixed(6))
+      if (oiPrev        !== null) params.set('oiPrev',        oiPrev.toFixed(2))
+      if (oiCurr        !== null) params.set('oiCurr',        oiCurr.toFixed(2))
       if (takerBuyRatio !== null) params.set('takerBuyRatio', takerBuyRatio.toFixed(4))
-      if (lsLongRatio !== null) params.set('lsLongRatio',   lsLongRatio.toFixed(4))
+      if (lsLongRatio   !== null) params.set('lsLongRatio',   lsLongRatio.toFixed(4))
 
       const res  = await fetch(`/api/checklist?${params}`, { cache: 'no-store' })
       const json = await res.json()
