@@ -3,14 +3,15 @@
 //
 // Storage strategy (BTC):
 //   signal:btc          → current signal (SET, single key, always latest)
-//   btc:daily           → Redis HASH keyed by "YYYY-MM-DD"
-//                         one entry per calendar day, permanent, never trimmed
-//                         idempotent: same-day webhooks overwrite, no duplicates
-//                         this IS the TV 1D close price (webhook fires at bar close)
-//   history:btc         → legacy LPUSH list, kept for backward compat (500 entries)
+//   btc:daily           → Redis HASH keyed by "YYYY-MM-DD" — permanent daily prices
+//   btc:transitions     → Redis HASH keyed by "YYYY-MM-DD" — state change events only
+//                         written ONLY when state changes vs previous signal
+//                         field = date, value = {state, price, ts}
+//                         this is the source of truth for equity curve transitions
+//   history:btc         → legacy LPUSH list, kept for backward compat
 
-const REDIS_URL     = process.env.UPSTASH_REDIS_REST_URL
-const REDIS_TOKEN   = process.env.UPSTASH_REDIS_REST_TOKEN
+const REDIS_URL      = process.env.UPSTASH_REDIS_REST_URL
+const REDIS_TOKEN    = process.env.UPSTASH_REDIS_REST_TOKEN
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || 'Arpi-vypi-2026-btc'
 
 const headers = {
@@ -18,54 +19,40 @@ const headers = {
   'Content-Type': 'application/json',
 }
 
-async function redisCmd(cmd, ...args) {
-  const res = await fetch(`${REDIS_URL}/${cmd}/${args.map(encodeURIComponent).join('/')}`, {
-    method: 'GET',
-    headers,
+async function redisGet(key) {
+  const res = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, {
+    method: 'GET', headers,
   })
-  return res.json()
+  const d = await res.json()
+  if (!d.result) return null
+  try { return JSON.parse(d.result) } catch { return d.result }
 }
 
-async function redisPost(cmd, body) {
-  const res = await fetch(`${REDIS_URL}/${cmd}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-  return res.json()
-}
-
-// SET a single key
 async function redisSet(key, value) {
-  return redisCmd('set', key, JSON.stringify(value))
+  const res = await fetch(`${REDIS_URL}/set/${encodeURIComponent(key)}/${encodeURIComponent(JSON.stringify(value))}`, {
+    method: 'GET', headers,
+  })
+  return res.json()
 }
 
-// HSET into a hash: hset <hashKey> <field> <value>
-// Used for btc:daily — field = "YYYY-MM-DD", value = JSON entry
-// Overwrites same-day entries automatically (idempotent)
-// Upstash REST: args go in the URL path, not the body
 async function redisHSet(hashKey, field, value) {
-  const key   = encodeURIComponent(hashKey)
-  const f     = encodeURIComponent(field)
-  const v     = encodeURIComponent(JSON.stringify(value))
-  const res   = await fetch(`${REDIS_URL}/hset/${key}/${f}/${v}`, {
+  const key = encodeURIComponent(hashKey)
+  const f   = encodeURIComponent(field)
+  const v   = encodeURIComponent(JSON.stringify(value))
+  const res = await fetch(`${REDIS_URL}/hset/${key}/${f}/${v}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
   })
   return res.json()
 }
 
-// LPUSH + LTRIM for legacy list (backward compat)
 async function redisPush(key, value) {
   await fetch(`${REDIS_URL}/lpush/${key}`, {
-    method: 'POST',
-    headers,
+    method: 'POST', headers,
     body: JSON.stringify(JSON.stringify(value)),
   })
-  // Keep 500 most recent raw entries
   await fetch(`${REDIS_URL}/ltrim/${key}/0/499`, {
-    method: 'POST',
-    headers,
+    method: 'POST', headers,
     body: JSON.stringify([0, 499]),
   })
 }
@@ -102,36 +89,43 @@ export async function POST(request) {
         updated_at: new Date().toISOString(),
       }
 
-      // UTC date for the daily hash key
-      const dateKey = new Date(timestamp).toISOString().slice(0, 10) // "YYYY-MM-DD"
+      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
 
       const dailyEntry = {
-        state:  signal.state,
-        tpi:    signal.tpi,
-        roc:    signal.roc,
-        price:  signal.price,
-        ts:     timestamp,
-        date:   dateKey,
+        state: signal.state, tpi: signal.tpi, roc: signal.roc,
+        price: signal.price, ts: timestamp, date: dateKey,
       }
 
-      await Promise.all([
-        // 1. Current signal (always latest)
-        redisSet('signal:btc', signal),
-        // 2. Daily hash — permanent, deduplicated by date, never trimmed
-        //    Same-day calls overwrite → always stores the LAST price of the day
-        //    (most recent = closest to TV's actual daily close)
-        redisHSet('btc:daily', dateKey, dailyEntry),
-        // 3. Legacy list — kept for backward compat
-        redisPush('history:btc', {
-          state: signal.state,
-          tpi:   signal.tpi,
-          roc:   signal.roc,
-          price: signal.price,
-          ts:    signal.ts,
-        }),
-      ])
+      // Check if state has changed vs previous signal — if so, record a transition
+      const prevSignal = await redisGet('signal:btc')
+      const isTransition = !prevSignal || prevSignal.state !== state
 
-      return Response.json({ ok: true, script: 'btc', state, date: dateKey })
+      const writes = [
+        redisSet('signal:btc', signal),
+        redisHSet('btc:daily', dateKey, dailyEntry),
+        redisPush('history:btc', {
+          state: signal.state, tpi: signal.tpi, roc: signal.roc,
+          price: signal.price, ts: signal.ts,
+        }),
+      ]
+
+      if (isTransition) {
+        // Record this state change permanently in btc:transitions hash
+        // field = YYYY-MM-DD, value = {state, price, ts}
+        writes.push(redisHSet('btc:transitions', dateKey, {
+          state: signal.state,
+          price: signal.price,
+          ts:    timestamp,
+          date:  dateKey,
+        }))
+      }
+
+      await Promise.all(writes)
+
+      return Response.json({
+        ok: true, script: 'btc', state, date: dateKey,
+        transition: isTransition,
+      })
     }
 
     if (script === 'rotation') {
@@ -141,14 +135,10 @@ export async function POST(request) {
         ts:         timestamp,
         updated_at: new Date().toISOString(),
       }
-
       await redisSet('signal:rotation', signal)
       await redisPush('history:rotation', {
-        asset:      signal.asset,
-        prev_asset: signal.prev_asset,
-        ts:         signal.ts,
+        asset: signal.asset, prev_asset: signal.prev_asset, ts: signal.ts,
       })
-
       return Response.json({ ok: true, script: 'rotation', asset })
     }
 
