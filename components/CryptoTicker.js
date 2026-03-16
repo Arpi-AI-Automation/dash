@@ -1,98 +1,58 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 
 const COINS = [
-  { id: 'bitcoin',     symbol: 'BTC',  name: 'Bitcoin'     },
-  { id: 'ethereum',    symbol: 'ETH',  name: 'Ethereum'    },
-  { id: 'solana',      symbol: 'SOL',  name: 'Solana'      },
-  { id: 'sui',         symbol: 'SUI',  name: 'Sui'         },
-  { id: 'ripple',      symbol: 'XRP',  name: 'XRP'         },
-  { id: 'binancecoin', symbol: 'BNB',  name: 'BNB'         },
-  { id: 'aave',        symbol: 'AAVE', name: 'Aave'        },
-  { id: 'dogecoin',    symbol: 'DOGE', name: 'Dogecoin'    },
-  { id: 'hyperliquid', symbol: 'HYPE', name: 'Hyperliquid' },
-  { id: 'pax-gold',    symbol: 'PAXG', name: 'PAX Gold'    },
-  { id: 'monero',      symbol: 'XMR',  name: 'Monero'      },
+  { id: 'bitcoin',     symbol: 'BTC'  },
+  { id: 'ethereum',    symbol: 'ETH'  },
+  { id: 'solana',      symbol: 'SOL'  },
+  { id: 'sui',         symbol: 'SUI'  },
+  { id: 'ripple',      symbol: 'XRP'  },
+  { id: 'binancecoin', symbol: 'BNB'  },
+  { id: 'aave',        symbol: 'AAVE' },
+  { id: 'dogecoin',    symbol: 'DOGE' },
+  { id: 'hyperliquid', symbol: 'HYPE' },
+  { id: 'pax-gold',    symbol: 'PAXG' },
+  { id: 'monero',      symbol: 'XMR'  },
 ]
 
-function TickerItem({ symbol, price, change }) {
-  const up = change >= 0
-  return (
-    <span className="inline-flex items-center gap-2 px-5 border-r border-[#111] whitespace-nowrap">
-      <span className="text-[10px] font-bold tracking-widest text-[#666]">{symbol}</span>
-      <span className="text-[11px] font-bold text-[#e8e8e8]">
-        ${price < 1 ? price.toFixed(4) : price < 100 ? price.toFixed(2) : price.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-      </span>
-      <span className="text-[10px] font-bold" style={{ color: up ? '#22c55e' : '#ef4444' }}>
-        {up ? '+' : ''}{change.toFixed(2)}%
-      </span>
-    </span>
-  )
+function fmt(price) {
+  if (price >= 1000)  return '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (price >= 1)     return '$' + price.toFixed(2)
+  return '$' + price.toFixed(4)
 }
 
 export default function CryptoTicker() {
-  const [prices, setPrices]   = useState({})
-  const [loading, setLoading] = useState(true)
-  const trackRef = useRef(null)
-
-  const fetchPrices = async () => {
-    try {
-      const ids = COINS.map(c => c.id).join(',')
-      const res = await fetch(
-        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
-        { cache: 'no-store' }
-      )
-      const data = await res.json()
-      setPrices(data)
-      setLoading(false)
-    } catch {}
-  }
+  const [prices, setPrices] = useState({})
 
   useEffect(() => {
-    fetchPrices()
-    const iv = setInterval(fetchPrices, 60000)
+    const fetch_ = async () => {
+      try {
+        const ids = COINS.map(c => c.id).join(',')
+        const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`, { cache: 'no-store' })
+        setPrices(await r.json())
+      } catch {}
+    }
+    fetch_()
+    const iv = setInterval(fetch_, 60000)
     return () => clearInterval(iv)
   }, [])
 
-  const items = COINS.filter(c => prices[c.id]).map(c => ({
-    ...c,
-    price:  prices[c.id]?.usd ?? 0,
-    change: prices[c.id]?.usd_24h_change ?? 0,
-  }))
-
-  // Duplicate for seamless loop
-  const display = [...items, ...items]
-
   return (
-    <div className="w-full bg-[#060606] border-b border-[#111] overflow-hidden relative h-9 flex items-center">
-      {/* fade edges */}
-      <div className="absolute left-0 top-0 bottom-0 w-12 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to right, #060606, transparent)' }} />
-      <div className="absolute right-0 top-0 bottom-0 w-12 z-10 pointer-events-none"
-        style={{ background: 'linear-gradient(to left, #060606, transparent)' }} />
-
-      {loading ? (
-        <div className="text-[10px] text-[#333] tracking-widest px-5">LOADING MARKETS...</div>
-      ) : (
-        <div className="ticker-track flex" ref={trackRef}>
-          {display.map((coin, i) => (
-            <TickerItem key={`${coin.id}-${i}`} symbol={coin.symbol} price={coin.price} change={coin.change} />
-          ))}
-        </div>
-      )}
-
-      <style>{`
-        .ticker-track {
-          animation: ticker-scroll 60s linear infinite;
-        }
-        .ticker-track:hover {
-          animation-play-state: paused;
-        }
-        @keyframes ticker-scroll {
-          0%   { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
-        }
-      `}</style>
+    <div style={{ width: '100%', background: '#060606', borderBottom: '1px solid #111', display: 'flex', alignItems: 'center', height: '36px', overflow: 'hidden', padding: '0 16px', gap: 0 }}>
+      {COINS.map((coin, i) => {
+        const d = prices[coin.id]
+        const change = d?.usd_24h_change ?? 0
+        const up = change >= 0
+        return (
+          <div key={coin.id} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0 16px', borderRight: '1px solid #111', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            <span style={{ fontSize: '9px', fontWeight: 700, letterSpacing: '0.1em', color: '#444' }}>{coin.symbol}</span>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: '#d0d0d0' }}>{d ? fmt(d.usd) : '—'}</span>
+            <span style={{ fontSize: '10px', fontWeight: 600, color: up ? '#22c55e' : '#ef4444' }}>
+              {d ? (up ? '+' : '') + change.toFixed(2) + '%' : ''}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
