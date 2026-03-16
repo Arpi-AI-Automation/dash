@@ -110,9 +110,21 @@ function CombinedChart({ history }) {
     if (btcPts.length < 2) return
 
     // ── 2. Compute both equity curves ──
-    // Uses prev.state (signal confirmed at prev daily close) — no repaint
-    const eqLS   = [1.0]  // Long/Short: capture move in both directions
-    const eqHODL = [1.0]  // Hold/Sell:  capture move only when LONG, flat when SHORT
+    // Uses prev.state (signal confirmed at prev daily close) — no repaint.
+    //
+    // Seed values: pre-computed from CSV (all 80 trades, T1 Jan 2018 → T65 Feb 2025),
+    // mark-to-market for T66 SHORT (entered $100,646.50) at the window start price.
+    // Without seeds, the curve starts at 1.0x from $82,611 SHORT — wrong base.
+    // With seeds, the shape is identical but correctly anchored to full strategy history.
+    // Both curves are then normalised (÷ seed) so they start at 1.0x visually.
+    //
+    // Curve A (LS):   seed = 846.371 (T1–T65 compounded + T66 SHORT unrealised at $82,611)
+    // Curve B (HODL): seed = 113.445 (LONG trades only, T66 SHORT = flat/USD, no contribution)
+    const LS_SEED   = 846.371122
+    const HODL_SEED = 113.445263
+
+    const eqLS   = [LS_SEED]
+    const eqHODL = [HODL_SEED]
 
     for (let i = 1; i < btcPts.length; i++) {
       const prev = btcPts[i - 1], cur = btcPts[i]
@@ -126,6 +138,10 @@ function CombinedChart({ history }) {
       const prevHODL = eqHODL[eqHODL.length - 1]
       eqHODL.push(prev.state === 'LONG' ? prevHODL * (1 + pct) : prevHODL)
     }
+
+    // Normalise both curves to start at 1.0x — preserves shape, correct endpoint
+    const eqLSnorm   = eqLS.map(v => v / LS_SEED)
+    const eqHODLnorm = eqHODL.map(v => v / HODL_SEED)
 
     // ── 3. Layout ──
     const pad = { t: 8, r: 56, b: 20, l: 60 }
@@ -171,7 +187,7 @@ function CombinedChart({ history }) {
     ctx.setLineDash([])
 
     // ── 5. Equity panel (bottom) — shared scale across both curves ──
-    const allEq  = [...eqLS, ...eqHODL]
+    const allEq  = [...eqLSnorm, ...eqHODLnorm]
     const minE   = Math.min(...allEq), maxE = Math.max(...allEq)
     const rangeE = maxE - minE || 0.01
 
@@ -211,29 +227,28 @@ function CombinedChart({ history }) {
     }
 
     // Curve B (amber, Hold/Sell) — draw first so purple sits on top
-    drawCurve(eqHODL, '#f59e0b', 'rgba(245,158,11,0.08)')
+    drawCurve(eqHODLnorm, '#f59e0b', 'rgba(245,158,11,0.08)')
     // Curve A (purple, Long/Short)
-    drawCurve(eqLS,   '#818cf8', 'rgba(129,140,248,0.12)')
+    drawCurve(eqLSnorm,   '#818cf8', 'rgba(129,140,248,0.12)')
 
     // Signal-change dots on both curves
     TRADE_EXITS.forEach(exit => {
       const idx = btcPts.findIndex(p => new Date(p.ts).toISOString().slice(0, 10) === exit.date)
       if (idx < 0) return
-      ;[[eqLS, '#818cf8'], [eqHODL, '#f59e0b']].forEach(([pts, col]) => {
-        ctx.beginPath(); ctx.arc(eX(idx), eY(pts[idx]), 2.5, 0, Math.PI * 2)
+      ;[[eqLSnorm, '#818cf8'], [eqHODLnorm, '#f59e0b']].forEach(([pts, col]) => {
+        ctx.beginPath(); ctx.arc(eX(idx), eY(pts[idx] ?? 1), 2.5, 0, Math.PI * 2)
         ctx.fillStyle = col; ctx.fill()
       })
     })
 
-    // End-of-curve labels
-    const lastLS   = eqLS[eqLS.length - 1]
-    const lastHODL = eqHODL[eqHODL.length - 1]
-    const lastX    = eX(btcPts.length - 1)
+    // End-of-curve labels — placed INSIDE left margin to avoid overlap with curves
+    const lastLS   = eqLSnorm[eqLSnorm.length - 1]
+    const lastHODL = eqHODLnorm[eqHODLnorm.length - 1]
     ctx.font = 'bold 10px monospace'; ctx.textAlign = 'right'
     ctx.fillStyle = '#818cf8'
-    ctx.fillText(`${lastLS.toFixed(3)}x`, lastX - 2, eY(lastLS) - 4)
+    ctx.fillText(`${lastLS.toFixed(3)}x`, pad.l - 6, eY(lastLS) + 4)
     ctx.fillStyle = '#f59e0b'
-    ctx.fillText(`${lastHODL.toFixed(3)}x`, lastX - 2, eY(lastHODL) + 12)
+    ctx.fillText(`${lastHODL.toFixed(3)}x`, pad.l - 6, eY(lastHODL) + 4)
 
     // ── 6. Shared x-axis labels ──
     ctx.fillStyle = '#6b7280'; ctx.font = '9px monospace'; ctx.textAlign = 'center'
