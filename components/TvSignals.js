@@ -109,39 +109,77 @@ function CombinedChart({ history }) {
     const btcPts = Object.keys(dayMap).sort().map(d => dayMap[d])
     if (btcPts.length < 2) return
 
-    // ── 2. Compute both equity curves ──
-    // Uses prev.state (signal confirmed at prev daily close) — no repaint.
+    // ── 2. Compute both equity curves — TRADE-LEVEL compounding ──
     //
-    // Seed values: pre-computed from CSV (all 80 trades, T1 Jan 2018 → T65 Feb 2025),
-    // mark-to-market for T66 SHORT (entered $100,646.50) at the window start price.
-    // Without seeds, the curve starts at 1.0x from $82,611 SHORT — wrong base.
-    // With seeds, the shape is identical but correctly anchored to full strategy history.
-    // Both curves are then normalised (÷ seed) so they start at 1.0x visually.
+    // Method: compound only at state transitions using the transition prices.
+    // Within a segment (no state change), equity is interpolated linearly for display
+    // but the ONLY prices that affect the compounded return are the entry and exit
+    // of each trade segment. This matches how you actually trade: enter at signal,
+    // hold until next signal, exit at that price. No daily rebalancing.
     //
-    // Curve A (LS):   seed = 846.371 (T1–T65 compounded + T66 SHORT unrealised at $82,611)
-    // Curve B (HODL): seed = 113.445 (LONG trades only, T66 SHORT = flat/USD, no contribution)
-    const LS_SEED   = 846.371122
-    const HODL_SEED = 113.445263
+    // Curve A (L/S):   LONG = gain when price rises, SHORT = gain when price falls
+    // Curve B (HODL):  LONG = hold BTC (price return), SHORT = flat in USD
+    //
+    // Both start at 1.0x on the first day of the window (no seeds needed).
+    // No repaint: signal on day[i] (prev) is applied to the move from day[i]→day[j]
+    // where day[j] is the NEXT transition day.
 
-    const eqLS   = [LS_SEED]
-    const eqHODL = [HODL_SEED]
-
+    // Build trade segments: [{entryIdx, exitIdx, entryPrice, exitPrice, state}]
+    const segments = []
+    let segStart = 0
     for (let i = 1; i < btcPts.length; i++) {
-      const prev = btcPts[i - 1], cur = btcPts[i]
-      const pct = (cur.price - prev.price) / prev.price
-
-      // Curve A: Long/Short — gain when LONG (price up) OR SHORT (price down)
-      const prevLS = eqLS[eqLS.length - 1]
-      eqLS.push(prevLS * (1 + (prev.state === 'LONG' ? pct : -pct)))
-
-      // Curve B: Hold/Sell — gain when LONG (hold BTC), flat when SHORT (in USD)
-      const prevHODL = eqHODL[eqHODL.length - 1]
-      eqHODL.push(prev.state === 'LONG' ? prevHODL * (1 + pct) : prevHODL)
+      const isLast = i === btcPts.length - 1
+      if (btcPts[i].state !== btcPts[segStart].state || isLast) {
+        segments.push({
+          entryIdx:   segStart,
+          exitIdx:    isLast && btcPts[i].state === btcPts[segStart].state ? i : i - 1,
+          entryPrice: btcPts[segStart].price,
+          exitPrice:  (isLast && btcPts[i].state === btcPts[segStart].state) ? btcPts[i].price : btcPts[i - 1].price,
+          state:      btcPts[segStart].state,
+        })
+        segStart = i
+      }
+    }
+    // Add the final open segment (from last transition to today)
+    if (segStart < btcPts.length - 1) {
+      segments.push({
+        entryIdx:   segStart,
+        exitIdx:    btcPts.length - 1,
+        entryPrice: btcPts[segStart].price,
+        exitPrice:  btcPts[btcPts.length - 1].price,
+        state:      btcPts[segStart].state,
+      })
     }
 
-    // Normalise both curves to start at 1.0x — preserves shape, correct endpoint
-    const eqLSnorm   = eqLS.map(v => v / LS_SEED)
-    const eqHODLnorm = eqHODL.map(v => v / HODL_SEED)
+    // Build per-point arrays by interpolating equity within each segment
+    const eqLSnorm   = new Array(btcPts.length)
+    const eqHODLnorm = new Array(btcPts.length)
+    eqLSnorm[0]   = 1.0
+    eqHODLnorm[0] = 1.0
+
+    let cumLS   = 1.0
+    let cumHODL = 1.0
+
+    for (const seg of segments) {
+      const { entryIdx, exitIdx, entryPrice, exitPrice, state } = seg
+      const rawPct   = (exitPrice - entryPrice) / entryPrice
+      const lsPct    = state === 'LONG' ? rawPct : -rawPct
+      const hodlPct  = state === 'LONG' ? rawPct : 0
+
+      const segLS_end   = cumLS   * (1 + lsPct)
+      const segHODL_end = cumHODL * (1 + hodlPct)
+
+      // Interpolate display points linearly within the segment
+      const steps = exitIdx - entryIdx
+      for (let k = 1; k <= steps; k++) {
+        const t = k / steps
+        eqLSnorm[entryIdx + k]   = cumLS   + (segLS_end   - cumLS)   * t
+        eqHODLnorm[entryIdx + k] = cumHODL + (segHODL_end - cumHODL) * t
+      }
+
+      cumLS   = segLS_end
+      cumHODL = segHODL_end
+    }
 
     // ── 3. Layout ──
     const pad = { t: 8, r: 56, b: 20, l: 60 }
