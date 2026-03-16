@@ -322,6 +322,22 @@ export default function TvSignals() {
     return () => clearInterval(interval)
   }, [])
 
+  // Live BTC price — fetched every 30s, separate from signal price (UTC close)
+  const [livePrice, setLivePrice] = useState(null)
+  useEffect(() => {
+    const fetchLive = async () => {
+      try {
+        const r = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot')
+        const j = await r.json()
+        const p = parseFloat(j?.data?.amount)
+        if (p > 0) setLivePrice(p)
+      } catch {}
+    }
+    fetchLive()
+    const iv = setInterval(fetchLive, 30_000)
+    return () => clearInterval(iv)
+  }, [])
+
   const btc = data?.btc
   const rotation = data?.rotation
   const btcHistory = data?.history?.btc || []
@@ -353,9 +369,23 @@ export default function TvSignals() {
               {fmt2(btc.roc)}
             </span>
           </span>
-          {btc.price > 0 && (
-            <span className="text-gray-400 ml-auto">{fmtPrice(btc.price)}</span>
-          )}
+          <span className="ml-auto flex items-center gap-2 font-mono">
+            {livePrice && livePrice !== btc.price ? (
+              <>
+                <span className="text-gray-200">{fmtPrice(livePrice)}</span>
+                <span className="text-gray-600">/</span>
+                <span className="text-gray-500 text-xs">{fmtPrice(btc.price)}</span>
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: livePrice >= btc.price ? '#22c55e' : '#ef4444' }}
+                >
+                  {livePrice >= btc.price ? '+' : ''}{(((livePrice - btc.price) / btc.price) * 100).toFixed(2)}%
+                </span>
+              </>
+            ) : btc.price > 0 ? (
+              <span className="text-gray-400">{fmtPrice(btc.price)}</span>
+            ) : null}
+          </span>
           {btc.updated_at && (
             <span className="text-gray-600 text-xs">
               {new Date(btc.updated_at).toLocaleDateString()}
@@ -380,35 +410,59 @@ export default function TvSignals() {
       <div className="grid grid-cols-2 gap-4">
 
         {/* BTC Signal Card */}
-        <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4 space-y-4">
-          <div className="text-xs text-gray-500 uppercase tracking-wider">BTC / ORPI1</div>
+        <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-5 space-y-5">
+          <div className="text-xs text-gray-500 uppercase tracking-wider">BTC TPI STRAT v.2026</div>
 
           {btc ? (
             <>
-              <div className="flex items-center gap-3">
+              {/* State badge + price block */}
+              <div className="flex items-start justify-between gap-4">
                 <div
-                  className={`px-3 py-1.5 rounded-md font-bold text-sm ${stateMeta.bg} ${stateMeta.text}`}
+                  className={`px-4 py-2 rounded-md font-bold text-base ${stateMeta.bg} ${stateMeta.text}`}
                 >
                   {btc.state}
                 </div>
-                <div className="text-gray-300 text-lg font-mono font-bold">
-                  {fmtPrice(btc.price)}
+
+                {/* Dual price: live / UTC close */}
+                <div className="text-right">
+                  {livePrice ? (
+                    <>
+                      <div className="font-mono font-bold text-xl text-gray-100">
+                        {fmtPrice(livePrice)}
+                      </div>
+                      <div className="flex items-center justify-end gap-2 mt-0.5">
+                        <span className="text-gray-500 text-xs font-mono">{fmtPrice(btc.price)}</span>
+                        <span
+                          className="text-xs font-mono font-semibold"
+                          style={{ color: livePrice >= btc.price ? '#22c55e' : '#ef4444' }}
+                        >
+                          {livePrice >= btc.price ? '+' : ''}
+                          {(((livePrice - btc.price) / btc.price) * 100).toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="text-gray-600 text-xs mt-0.5">live / UTC close</div>
+                    </>
+                  ) : (
+                    <div className="font-mono font-bold text-xl text-gray-100">
+                      {fmtPrice(btc.price)}
+                    </div>
+                  )}
                 </div>
               </div>
 
               <TpiGauge tpi={btc.tpi} />
 
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-gray-900 rounded p-2">
-                  <div className="text-gray-500">TPI (live)</div>
-                  <div className="font-mono font-bold" style={{ color: stateColor(btc.state) }}>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-900 rounded-lg p-3">
+                  <div className="text-gray-500 text-xs mb-1">TPI</div>
+                  <div className="font-mono font-bold text-lg" style={{ color: stateColor(btc.state) }}>
                     {fmt2(btc.tpi)}
                   </div>
                 </div>
-                <div className="bg-gray-900 rounded p-2">
-                  <div className="text-gray-500">RoC</div>
+                <div className="bg-gray-900 rounded-lg p-3">
+                  <div className="text-gray-500 text-xs mb-1">RoC</div>
                   <div
-                    className="font-mono font-bold"
+                    className="font-mono font-bold text-lg"
                     style={{ color: (btc.roc ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}
                   >
                     {fmt2(btc.roc)}
