@@ -6,9 +6,24 @@ import SectionHeader from './SectionHeader'
 // Sorted ascending. State persists until next entry.
 // UPDATE THIS ARRAY with your actual TPI history.
 const TPI_TRANSITIONS = [
-  // { date: '2024-12-07', state: 'LONG' },
-  // { date: '2025-01-20', state: 'SHORT' },
-  // Add your actual TPI transitions here
+  {"date":"2024-12-07","state":"LONG"},
+  {"date":"2024-12-21","state":"SHORT"},
+  {"date":"2025-01-16","state":"LONG"},
+  {"date":"2025-02-01","state":"SHORT"},
+  {"date":"2025-04-21","state":"LONG"},
+  {"date":"2025-06-17","state":"SHORT"},
+  {"date":"2025-06-29","state":"LONG"},
+  {"date":"2025-07-01","state":"SHORT"},
+  {"date":"2025-07-02","state":"LONG"},
+  {"date":"2025-08-18","state":"SHORT"},
+  {"date":"2025-09-16","state":"LONG"},
+  {"date":"2025-09-19","state":"SHORT"},
+  {"date":"2025-10-01","state":"LONG"},
+  {"date":"2025-10-10","state":"SHORT"},
+  {"date":"2026-01-05","state":"LONG"},
+  {"date":"2026-01-09","state":"SHORT"},
+  {"date":"2026-01-11","state":"LONG"},
+  {"date":"2026-01-20","state":"SHORT"},
 ]
 
 async function fetchAllData() {
