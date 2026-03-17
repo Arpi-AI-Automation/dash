@@ -1,5 +1,5 @@
 import dynamic from 'next/dynamic'
-import CryptoTicker from '../components/CryptoTicker'
+
 import SidebarMarkets from '../components/SidebarMarkets'
 import DecisionChecklist from '../components/DecisionChecklist'
 import ChecklistBacktest from '../components/ChecklistBacktest'
@@ -17,9 +17,6 @@ export const revalidate = 0
 export default function Home() {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: '#e8e8e8' }}>
-
-      {/* TICKER */}
-      <CryptoTicker />
 
       {/* BODY */}
       <div style={{ display: 'flex' }}>

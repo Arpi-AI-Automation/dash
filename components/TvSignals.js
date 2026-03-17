@@ -417,52 +417,6 @@ export default function TvSignals() {
   return (
     <div className="space-y-4">
 
-      {/* ── Signal Banner ── */}
-      {btc && (
-        <div
-          className="flex items-center gap-4 bg-[#0f172a] border border-gray-800 rounded-lg px-4 py-3 font-mono text-sm"
-          style={{ borderLeftWidth: 3, borderLeftColor: stateColor(btc.state) }}
-        >
-          <span className="text-gray-400">BTC</span>
-          <span
-            className={`px-2 py-0.5 rounded text-xs font-bold ${stateMeta.bg} ${stateMeta.text}`}
-          >
-            {btc.state}
-          </span>
-          <span className="text-gray-300">
-            TPI <span style={{ color: stateColor(btc.state) }}>{fmt2(btc.tpi)}</span>
-          </span>
-          <span className="text-gray-300">
-            RoC{' '}
-            <span style={{ color: btc.roc >= 0 ? '#22c55e' : '#ef4444' }}>
-              {fmt2(btc.roc)}
-            </span>
-          </span>
-          <span className="ml-auto flex items-center gap-2 font-mono">
-            {livePrice && livePrice !== btc.price ? (
-              <>
-                <span className="text-gray-200">{fmtPrice(livePrice)}</span>
-                <span className="text-gray-600">/</span>
-                <span className="text-gray-500 text-xs">{fmtPrice(btc.price)}</span>
-                <span
-                  className="text-xs font-semibold"
-                  style={{ color: livePrice >= btc.price ? '#22c55e' : '#ef4444' }}
-                >
-                  {livePrice >= btc.price ? '+' : ''}{(((livePrice - btc.price) / btc.price) * 100).toFixed(2)}%
-                </span>
-              </>
-            ) : btc.price > 0 ? (
-              <span className="text-gray-400">{fmtPrice(btc.price)}</span>
-            ) : null}
-          </span>
-          {btc.updated_at && (
-            <span className="text-gray-600 text-xs">
-              {new Date(btc.updated_at).toLocaleDateString()}
-            </span>
-          )}
-        </div>
-      )}
-
       {loading && !btc && (
         <div className="bg-[#0f172a] border border-gray-800 rounded-lg px-4 py-3 text-gray-500 text-sm font-mono">
           Waiting for first TradingView signal…

@@ -15,7 +15,7 @@ export async function GET() {
       ),
       // Fetch OHLC for each to get UTC daily close (prev completed candle)
       Promise.all(IDS.map(id =>
-        fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=1`, { cache: 'no-store' })
+        fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=2`, { cache: 'no-store' })
           .then(r => r.json())
           .then(data => ({ id, prevClose: Array.isArray(data) && data.length >= 2 ? data[data.length - 2]?.[4] : null }))
           .catch(() => ({ id, prevClose: null }))

@@ -56,7 +56,7 @@ export default function SidebarMarkets() {
   const [markets, setMarkets] = useState({})
   const [updated, setUpdated] = useState(null)
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (retry = 0) => {
     try {
       const [cgRes, mktRes] = await Promise.all([
         fetch('/api/crypto-prices'),
@@ -67,7 +67,9 @@ export default function SidebarMarkets() {
       if (cgData.ok)  setCrypto(cgData.data)
       if (mktData.ok) setMarkets(mktData.data)
       setUpdated(new Date())
-    } catch {}
+    } catch {
+      if (retry < 2) setTimeout(() => fetchData(retry + 1), 3000)
+    }
   }, [])
 
   useEffect(() => {
