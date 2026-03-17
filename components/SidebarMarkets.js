@@ -1,50 +1,82 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 
-const FOREX = ['AUD/USD', 'AUD/JPY', 'EUR/JPY']
+const COINGECKO_IDS = [
+  { id: 'bitcoin',     symbol: 'BTC',  name: 'Bitcoin'     },
+  { id: 'ethereum',    symbol: 'ETH',  name: 'Ethereum'    },
+  { id: 'solana',      symbol: 'SOL',  name: 'Solana'      },
+  { id: 'sui',         symbol: 'SUI',  name: 'Sui'         },
+  { id: 'ripple',      symbol: 'XRP',  name: 'XRP'         },
+  { id: 'hyperliquid', symbol: 'HYPE', name: 'Hyperliquid' },
+  { id: 'pax-gold',    symbol: 'PAXG', name: 'PAX Gold'    },
+]
+const FOREX    = ['AUD/USD', 'AUD/JPY', 'EUR/JPY', 'GBP/JPY', 'USD/JPY']
 const EQUITIES = ['SPY', 'QQQ']
 
-function SidebarRow({ symbol, name, price, change, prefix = '$' }) {
-  const up = change >= 0
+function fmtPrice(price, sym) {
+  if (price == null) return '—'
+  if (sym?.includes('JPY')) return '¥' + price.toFixed(2)
+  if (price >= 10000) return '$' + price.toLocaleString('en-US', { maximumFractionDigits: 0 })
+  if (price >= 100)   return '$' + price.toFixed(2)
+  if (price >= 1)     return '$' + price.toFixed(3)
+  return '$' + price.toFixed(4)
+}
+
+function Row({ symbol, price, change, sym }) {
+  const up   = (change ?? 0) >= 0
+  const zero = Math.abs(change ?? 0) < 0.001
   return (
-    <div className="flex flex-col py-2.5 border-b border-[#0f0f0f] last:border-0">
-      <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[10px] font-bold tracking-widest text-[#555]">{symbol}</span>
-        <span className="text-[10px] font-bold" style={{ color: up ? '#22c55e' : '#ef4444' }}>
-          {up ? '▲' : '▼'} {Math.abs(change).toFixed(2)}%
-        </span>
-      </div>
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] text-[#333] tracking-wide">{name}</span>
-        <span className="text-[12px] font-bold text-[#ccc]">
-          {prefix}{typeof price === 'number' ? price.toFixed(price > 10 ? 2 : 4) : '—'}
-        </span>
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '7px 0', borderBottom: '1px solid #1a1a1a'
+    }}>
+      <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace', letterSpacing: '0.04em' }}>
+        {symbol}
+      </span>
+      <div style={{ textAlign: 'right' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', fontFamily: 'monospace' }}>
+          {fmtPrice(price, sym)}
+        </div>
+        <div style={{
+          fontSize: 11, fontWeight: 600, fontFamily: 'monospace',
+          color: zero ? '#555' : up ? '#26a69a' : '#ef5350'
+        }}>
+          {zero ? '—' : (up ? '+' : '') + (change ?? 0).toFixed(2) + '%'}
+        </div>
       </div>
     </div>
   )
 }
 
-function SidebarSection({ label, children }) {
+function SectionLabel({ label }) {
   return (
-    <div className="mb-5">
-      <div className="text-[9px] text-[#252525] tracking-[0.3em] mb-2 pb-1 border-b border-[#0d0d0d]">{label}</div>
-      {children}
+    <div style={{
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.15em',
+      color: '#555', padding: '10px 0 4px', textTransform: 'uppercase'
+    }}>
+      {label}
     </div>
   )
 }
 
 export default function SidebarMarkets() {
-  const [data,    setData]    = useState({})
-  const [loading, setLoading] = useState(true)
+  const [crypto,  setCrypto]  = useState({})
+  const [markets, setMarkets] = useState({})
   const [updated, setUpdated] = useState(null)
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/markets', { cache: 'no-store' })
-      const d   = await res.json()
-      if (d.ok) { setData(d.data); setUpdated(new Date()) }
+      const ids = COINGECKO_IDS.map(c => c.id).join(',')
+      const [cgRes, mktRes] = await Promise.all([
+        fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`, { cache: 'no-store' }),
+        fetch('/api/markets', { cache: 'no-store' }),
+      ])
+      const cgData  = await cgRes.json()
+      const mktData = await mktRes.json()
+      setCrypto(cgData)
+      if (mktData.ok) setMarkets(mktData.data)
+      setUpdated(new Date())
     } catch {}
-    finally { setLoading(false) }
   }, [])
 
   useEffect(() => {
@@ -53,56 +85,54 @@ export default function SidebarMarkets() {
     return () => clearInterval(iv)
   }, [fetchData])
 
-  const forex    = FOREX.map(sym => ({ sym, ...data[sym] }))
-  const equities = EQUITIES.map(sym => ({ sym, ...data[sym] }))
-
   return (
-    <div>
-      <div className="text-[9px] text-[#222] tracking-[0.3em] mb-5 pb-2 border-b border-[#0f0f0f]">
-        MARKETS
-      </div>
+    <div style={{ padding: '8px 4px 40px' }}>
 
-      {loading ? (
-        <div className="text-[10px] text-[#2a2a2a] tracking-widest">LOADING...</div>
-      ) : (
-        <>
-          <SidebarSection label="FOREX">
-            {forex.map(f => (
-              <SidebarRow
-                key={f.sym}
-                symbol={f.sym}
-                name={f.sym}
-                price={f.price}
-                change={f.change24h ?? 0}
-                prefix={f.sym.includes('JPY') ? '¥' : '$'}
-              />
-            ))}
-          </SidebarSection>
+      {/* CRYPTO */}
+      <SectionLabel label="Crypto" />
+      {COINGECKO_IDS.map(c => {
+        const d = crypto[c.id]
+        return (
+          <Row
+            key={c.id}
+            symbol={c.symbol}
+            price={d?.usd ?? null}
+            change={d?.usd_24h_change ?? null}
+          />
+        )
+      })}
 
-          <SidebarSection label="EQUITIES">
-            {equities.map(e => (
-              <SidebarRow
-                key={e.sym}
-                symbol={e.sym}
-                name={e.sym === 'SPY' ? 'S&P 500 ETF' : 'Nasdaq ETF'}
-                price={e.price}
-                change={e.change24h ?? 0}
-              />
-            ))}
-          </SidebarSection>
+      {/* FOREX */}
+      <SectionLabel label="Forex" />
+      {FOREX.map(sym => {
+        const d = markets[sym]
+        return (
+          <Row
+            key={sym}
+            symbol={sym.replace('/', '')}
+            price={d?.price ?? null}
+            change={d?.change24h ?? null}
+            sym={sym}
+          />
+        )
+      })}
 
-          <SidebarSection label="GOLD">
-            {data['PAXG'] ? (
-              <SidebarRow symbol="PAXG" name="PAX Gold" price={data['PAXG']?.price} change={data['PAXG']?.change24h ?? 0} />
-            ) : (
-              <div className="text-[9px] text-[#2a2a2a]">via crypto prices</div>
-            )}
-          </SidebarSection>
-        </>
-      )}
+      {/* EQUITIES */}
+      <SectionLabel label="Equities" />
+      {EQUITIES.map(sym => {
+        const d = markets[sym]
+        return (
+          <Row
+            key={sym}
+            symbol={sym}
+            price={d?.price ?? null}
+            change={d?.change24h ?? null}
+          />
+        )
+      })}
 
       {updated && (
-        <div className="text-[9px] text-[#1e1e1e] tracking-widest mt-4">
+        <div style={{ fontSize: 9, color: '#333', marginTop: 12, fontFamily: 'monospace' }}>
           {updated.toLocaleTimeString('en-US', { hour12: false })}
         </div>
       )}
