@@ -186,6 +186,89 @@ export async function POST(request) {
       })
     }
 
+    // ── System 2: RS Dynamic Hedging / viResearch style ─────────────────────
+    // Supports both scored (with allocation %) and plain (asset name only) payloads.
+    // TradingView alert message (full):
+    //   {"script":"s2","asset":"ETHUSD","btc_score":"0","eth_score":"6","sol_score":"2",
+    //    "sui_score":"2","xrp_score":"-4","bnb_score":"0","paxg_score":"-6",
+    //    "btc_alloc":"0","eth_alloc":"60","sol_alloc":"0","sui_alloc":"0",
+    //    "xrp_alloc":"0","bnb_alloc":"0","paxg_alloc":"40"}
+    // Minimal fallback (if plot vars don't resolve):
+    //   {"script":"s2","asset":"ETHUSD"}
+    if (script === 's2') {
+      if (!asset) {
+        return Response.json({ error: 'Missing asset field' }, { status: 400 })
+      }
+
+      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
+
+      // Parse scores if provided (null if not sent)
+      const hasScores = body.eth_score != null || body.btc_score != null
+      const scores = hasScores ? {
+        btc:  parseFloat(body.btc_score)  || 0,
+        eth:  parseFloat(body.eth_score)  || 0,
+        sol:  parseFloat(body.sol_score)  || 0,
+        sui:  parseFloat(body.sui_score)  || 0,
+        xrp:  parseFloat(body.xrp_score)  || 0,
+        bnb:  parseFloat(body.bnb_score)  || 0,
+        paxg: parseFloat(body.paxg_score) || 0,
+      } : null
+
+      const hasAlloc = body.eth_alloc != null || body.btc_alloc != null
+      const alloc = hasAlloc ? {
+        btc:  parseFloat(body.btc_alloc)  || 0,
+        eth:  parseFloat(body.eth_alloc)  || 0,
+        sol:  parseFloat(body.sol_alloc)  || 0,
+        sui:  parseFloat(body.sui_alloc)  || 0,
+        xrp:  parseFloat(body.xrp_alloc)  || 0,
+        bnb:  parseFloat(body.bnb_alloc)  || 0,
+        paxg: parseFloat(body.paxg_alloc) || 0,
+      } : null
+
+      const signal = {
+        asset:      asset.trim(),
+        prev_asset: prev_asset || null,
+        scores,
+        alloc,
+        ts:         timestamp,
+        updated_at: new Date().toISOString(),
+      }
+
+      const dailyEntry = {
+        asset:  signal.asset,
+        scores: signal.scores,
+        alloc:  signal.alloc,
+        ts:     timestamp,
+        date:   dateKey,
+      }
+
+      const prevS2     = await redisGet('signal:s2')
+      const isRotation = !prevS2 || prevS2.asset !== signal.asset
+
+      const writes = [
+        redisSet('signal:s2', signal),
+        redisHSet('s2:daily', dateKey, dailyEntry),
+        redisPush('history:s2', { asset: signal.asset, scores, alloc, ts: timestamp }),
+      ]
+
+      if (isRotation) {
+        writes.push(redisHSet('s2:transitions', dateKey, {
+          asset:      signal.asset,
+          prev_asset: prevS2?.asset || null,
+          date:       dateKey,
+          ts:         timestamp,
+        }))
+      }
+
+      await Promise.all(writes)
+
+      return Response.json({
+        ok: true, script: 's2', asset: signal.asset,
+        date: dateKey, rotation: isRotation,
+        hasScores, hasAlloc,
+      })
+    }
+
     return Response.json({ error: 'Unknown script type' }, { status: 400 })
   } catch (err) {
     console.error('Webhook error:', err)
