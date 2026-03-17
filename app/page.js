@@ -40,7 +40,6 @@ export default function Home() {
                 <RotationChart />
               </div>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
-                <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>FEAR & GREED</div>
                 <FearGreed />
               </div>
             </div>

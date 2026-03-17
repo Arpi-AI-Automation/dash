@@ -475,10 +475,8 @@ export default function TvSignals() {
         </div>
       )}
 
-      {/* ── Detail Cards Row ── */}
-      <div className="grid grid-cols-2 gap-4">
-
-        {/* BTC Signal Card */}
+      {/* ── BTC Signal Card ── */}
+      <div>
         <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-5 space-y-5">
           <div className="text-xs text-gray-500 uppercase tracking-wider">BTC TPI STRAT v.2026</div>
 
@@ -544,26 +542,6 @@ export default function TvSignals() {
           )}
         </div>
 
-        {/* Rotation Card */}
-        <div className="space-y-4">
-          <RotationCard rotation={rotation} />
-
-          {/* Legend */}
-          <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-3">
-            <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">State Legend</div>
-            <div className="space-y-1">
-              {Object.entries(STATE_META).map(([k, v]) => (
-                <div key={k} className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${v.bg}`} />
-                  <span className="text-xs text-gray-400">{k}</span>
-                  <span className="text-xs text-gray-600 ml-auto">
-                    {k === 'MAX LONG' ? '> 0.9' : k === 'LONG' ? '0.11 – 0.9' : k === 'NEUTRAL' ? '-0.1 – 0.11' : k === 'SHORT' ? '-0.9 – -0.11' : '< -0.9'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ── BTC Price + ORPI1 Equity Curve (shared x-axis) ── */}

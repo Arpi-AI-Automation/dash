@@ -381,24 +381,7 @@ export default function RotationChart() {
         </div>
       )}
 
-      {!scores && rotation && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #1f2937', fontFamily: 'monospace', fontSize: 12, color: '#888', textAlign: 'center' }}>
-          Dominant asset: <span style={{ color: assetColor, fontWeight: 700 }}>{assetLabel}</span>
-          <span style={{ color: '#555', marginLeft: 8 }}>· scores update on next webhook</span>
-        </div>
-      )}
-      {!scores && !rotation && (
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #1f2937', fontFamily: 'monospace', fontSize: 12, color: '#555', textAlign: 'center' }}>
-          Awaiting first webhook · set up TV alert to fire daily
-        </div>
-      )}
 
-      {/* Footer */}
-      <div className="px-4 py-2 border-t border-gray-800">
-        <p className="text-gray-700 text-xs font-mono">
-          Equity = hold selected asset · flat when USD · dots = rotation events · no repaint (prev close signal)
-        </p>
-      </div>
     </div>
   )
 }
