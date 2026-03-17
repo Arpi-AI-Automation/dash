@@ -1,134 +1,169 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
-// VI range: -3 (oversold/peak value) to +3 (overbought/overheating)
-// Zones:
-//   ≤ -2.0  → deep green  (strong buy zone)
-//   -2 to -1 → green
-//   -1 to +1 → grey (neutral)
-//   +1 to +2 → amber
-//   ≥ +2.0  → red (overbought)
-
-const ZONE_COLORS = [
-  { min: -3,   max: -2,   long: '#16a34a', label: 'DEEP VALUE'  },
-  { min: -2,   max: -1,   long: '#22c55e', label: 'VALUE'       },
-  { min: -1,   max:  1,   long: '#555',    label: 'NEUTRAL'     },
-  { min:  1,   max:  2,   long: '#f97316', label: 'ELEVATED'    },
-  { min:  2,   max:  3,   long: '#ef4444', label: 'OVERBOUGHT'  },
-]
-
-function getZone(v) {
-  return ZONE_COLORS.find(z => v >= z.min && v <= z.max) || ZONE_COLORS[2]
-}
+// Polarity: -3 = oversold (green, great to DCA) · +3 = overbought (red, poor value)
+// Shared by both Short-term (VI) and Full-cycle (VI-2)
 
 function getColor(v) {
-  if (v <= -2) return '#16a34a'
-  if (v <= -1) return '#22c55e'
-  if (v <   1) return '#555555'
-  if (v <   2) return '#f97316'
-  return '#ef4444'
+  if (v >=  2) return '#ef4444'
+  if (v >=  1) return '#f97316'
+  if (v > -1)  return '#555555'
+  if (v > -2)  return '#22c55e'
+  return '#16a34a'
 }
 
-export default function ValuationIndex() {
-  const [current, setCurrent] = useState(null)
-  const [history, setHistory] = useState([])
-  const [loading, setLoading] = useState(true)
+function getZoneLabel(v) {
+  if (v >=  2) return 'OVERBOUGHT'
+  if (v >=  1) return 'ELEVATED'
+  if (v > -1)  return 'NEUTRAL'
+  if (v > -2)  return 'VALUE'
+  return 'DEEP VALUE'
+}
+
+function drawChart(canvas, history, hoveredIdx) {
+  if (!canvas || history.length < 2) return
+  const dpr = window.devicePixelRatio || 1
+  const W = canvas.offsetWidth, H = canvas.offsetHeight
+  canvas.width = W * dpr; canvas.height = H * dpr
+  const ctx = canvas.getContext('2d')
+  ctx.scale(dpr, dpr)
+
+  const PAD = { left: 0, right: 0, top: 4, bottom: 4 }
+  const cW = W - PAD.left - PAD.right
+  const cH = H - PAD.top - PAD.bottom
+  const n = history.length
+  const step = cW / n
+  const vY = v => PAD.top + cH - ((v + 3) / 6) * cH
+
+  // Zone bands
+  const bands = [
+    { min: -3, max: -2, color: '#16a34a0c' },
+    { min: -2, max: -1, color: '#22c55e08' },
+    { min:  1, max:  2, color: '#f9731608' },
+    { min:  2, max:  3, color: '#ef44440c' },
+  ]
+  for (const b of bands) {
+    ctx.fillStyle = b.color
+    ctx.fillRect(PAD.left, vY(b.max), cW, vY(b.min) - vY(b.max))
+  }
+
+  // Zero line
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 0.5
+  ctx.beginPath(); ctx.moveTo(PAD.left, vY(0)); ctx.lineTo(W - PAD.right, vY(0)); ctx.stroke()
+
+  const values = history.map(d => parseFloat(d.value))
+
+  // Positive fill
+  ctx.beginPath()
+  ctx.moveTo(PAD.left + step / 2, vY(0))
+  values.forEach((v, i) => ctx.lineTo(PAD.left + i * step + step / 2, vY(Math.max(0, v))))
+  ctx.lineTo(PAD.left + (n - 1) * step + step / 2, vY(0))
+  ctx.closePath()
+  ctx.fillStyle = '#ef444414'; ctx.fill()
+
+  // Negative fill
+  ctx.beginPath()
+  ctx.moveTo(PAD.left + step / 2, vY(0))
+  values.forEach((v, i) => ctx.lineTo(PAD.left + i * step + step / 2, vY(Math.min(0, v))))
+  ctx.lineTo(PAD.left + (n - 1) * step + step / 2, vY(0))
+  ctx.closePath()
+  ctx.fillStyle = '#22c55e14'; ctx.fill()
+
+  // Colour-coded line
+  for (let i = 1; i < n; i++) {
+    ctx.beginPath()
+    ctx.moveTo(PAD.left + (i - 1) * step + step / 2, vY(values[i - 1]))
+    ctx.lineTo(PAD.left + i * step + step / 2, vY(values[i]))
+    ctx.strokeStyle = getColor(values[i]); ctx.lineWidth = 1.2; ctx.stroke()
+  }
+
+  // Hover
+  if (hoveredIdx !== null && hoveredIdx >= 0 && hoveredIdx < n) {
+    const x = PAD.left + hoveredIdx * step + step / 2
+    ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 0.5; ctx.setLineDash([2, 2])
+    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H - PAD.bottom); ctx.stroke()
+    ctx.setLineDash([])
+    ctx.beginPath(); ctx.arc(x, vY(values[hoveredIdx]), 2.5, 0, Math.PI * 2)
+    ctx.fillStyle = getColor(values[hoveredIdx]); ctx.fill()
+  }
+}
+
+function ValuationPanel({ label, current, history, loading }) {
   const [hovered, setHovered] = useState(null)
   const canvasRef = useRef(null)
 
   useEffect(() => {
-    fetch('/api/signals?history=true')
-      .then(r => r.json())
-      .then(d => {
-        setCurrent(d.vi ?? null)
-        const hist = Array.isArray(d.viDaily) ? d.viDaily : []
-        setHistory(hist.sort((a, b) => a.date?.localeCompare(b.date)))
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  // Draw oscillator canvas
-  useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas || !history.length) return
-    draw(canvas, history, hovered)
-    const onResize = () => draw(canvas, history, hovered)
+    drawChart(canvas, history, hovered)
+    const onResize = () => drawChart(canvas, history, hovered)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [history, hovered])
 
   const hoveredEntry = hovered !== null ? history[hovered] : null
-  const displayVal = hoveredEntry?.value ?? current?.value ?? null
-  const zone = displayVal !== null ? getZone(displayVal) : null
+  const displayVal = hoveredEntry?.value != null ? parseFloat(hoveredEntry.value)
+    : current?.value != null ? parseFloat(current.value) : null
+  const displayDate = hoveredEntry?.date ?? current?.date ?? null
 
   if (loading) return (
-    <div className="text-[10px] text-[#333] tracking-widest py-3">VI LOADING...</div>
+    <div className="text-[9px] text-[#2a2a2a] tracking-widest py-2">LOADING...</div>
   )
 
   if (!current && !history.length) return (
-    <div className="text-[10px] text-[#2a2a2a] tracking-widest py-3">
-      VI · AWAITING FIRST WEBHOOK
+    <div>
+      <div className="text-[9px] text-[#333] tracking-widest mb-1 uppercase">{label}</div>
+      <div className="text-[9px] text-[#2a2a2a] tracking-widest">AWAITING FIRST WEBHOOK</div>
     </div>
   )
 
   return (
     <div>
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] text-[#333] tracking-widest font-mono">VALUATION INDEX</span>
-        <div className="flex items-center gap-3">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[9px] text-[#333] tracking-widest font-mono uppercase">{label}</span>
+        <div className="flex items-center gap-2.5">
           {displayVal !== null && (
             <>
-              <span
-                className="text-[13px] font-mono font-bold tabular-nums"
-                style={{ color: getColor(displayVal) }}
-              >
+              <span className="text-[12px] font-mono font-bold tabular-nums"
+                style={{ color: getColor(displayVal) }}>
                 {displayVal >= 0 ? '+' : ''}{displayVal.toFixed(3)}
               </span>
-              <span
-                className="text-[10px] tracking-widest font-mono"
-                style={{ color: getColor(displayVal) }}
-              >
-                {zone?.label}
+              <span className="text-[9px] tracking-widest font-mono"
+                style={{ color: getColor(displayVal) }}>
+                {getZoneLabel(displayVal)}
               </span>
             </>
           )}
-          {current?.date && !hoveredEntry && (
-            <span className="text-[10px] text-[#333] font-mono">{current.date}</span>
-          )}
-          {hoveredEntry?.date && (
-            <span className="text-[10px] text-[#444] font-mono">{hoveredEntry.date}</span>
+          {displayDate && (
+            <span className="text-[9px] text-[#2a2a2a] font-mono">{displayDate}</span>
           )}
         </div>
       </div>
 
-      {/* Gauge bar — current value position */}
+      {/* Gauge bar */}
       {displayVal !== null && (
-        <div className="relative h-[3px] mb-3 rounded-full overflow-hidden" style={{ background: '#1a1a1a' }}>
-          {/* Zone fills */}
-          <div className="absolute inset-y-0" style={{ left: '0%',   width: '20%', background: '#16a34a22' }} />
-          <div className="absolute inset-y-0" style={{ left: '20%',  width: '20%', background: '#22c55e18' }} />
-          <div className="absolute inset-y-0" style={{ left: '40%',  width: '20%', background: '#33333318' }} />
-          <div className="absolute inset-y-0" style={{ left: '60%',  width: '20%', background: '#f9731618' }} />
-          <div className="absolute inset-y-0" style={{ left: '80%',  width: '20%', background: '#ef444422' }} />
-          {/* Cursor */}
-          <div
-            className="absolute top-0 w-[2px] h-full rounded-full"
+        <div className="relative h-[2px] mb-2 rounded-full overflow-hidden" style={{ background: '#1a1a1a' }}>
+          <div className="absolute inset-y-0" style={{ left: '0%',     width: '16.66%', background: '#16a34a20' }} />
+          <div className="absolute inset-y-0" style={{ left: '16.66%', width: '16.66%', background: '#22c55e16' }} />
+          <div className="absolute inset-y-0" style={{ left: '33.33%', width: '33.33%', background: '#33333312' }} />
+          <div className="absolute inset-y-0" style={{ left: '66.66%', width: '16.66%', background: '#f9731616' }} />
+          <div className="absolute inset-y-0" style={{ left: '83.33%', width: '16.66%', background: '#ef444420' }} />
+          <div className="absolute top-0 w-[2px] h-full rounded-full"
             style={{
-              left: `${((displayVal + 3) / 6) * 100}%`,
+              left: `${Math.min(100, Math.max(0, ((displayVal + 3) / 6) * 100))}%`,
               background: getColor(displayVal),
-              boxShadow: `0 0 4px ${getColor(displayVal)}`,
+              boxShadow: `0 0 3px ${getColor(displayVal)}`,
             }}
           />
         </div>
       )}
 
-      {/* Scale labels */}
-      <div className="flex justify-between mb-2">
+      {/* Scale */}
+      <div className="flex justify-between mb-1.5">
         {[-3, -2, -1, 0, 1, 2, 3].map(v => (
           <span key={v} className="text-[8px] font-mono" style={{ color: getColor(v) }}>
-            {v > 0 ? `+${v}` : v}
+            {v > 0 ? '+' + v : v}
           </span>
         ))}
       </div>
@@ -137,7 +172,7 @@ export default function ValuationIndex() {
       {history.length > 1 && (
         <canvas
           ref={canvasRef}
-          style={{ width: '100%', height: '56px', display: 'block', cursor: 'crosshair' }}
+          style={{ width: '100%', height: '52px', display: 'block', cursor: 'crosshair' }}
           onMouseMove={e => {
             const canvas = canvasRef.current
             if (!canvas || !history.length) return
@@ -150,9 +185,8 @@ export default function ValuationIndex() {
         />
       )}
 
-      {/* No history yet */}
       {history.length <= 1 && current && (
-        <div className="text-[9px] text-[#2a2a2a] tracking-widest mt-1">
+        <div className="text-[8px] text-[#222] tracking-widest">
           HISTORY BUILDS FROM NEXT DAILY CLOSE
         </div>
       )}
@@ -160,88 +194,32 @@ export default function ValuationIndex() {
   )
 }
 
-function draw(canvas, history, hoveredIdx) {
-  if (!canvas || !history.length) return
-  const dpr = window.devicePixelRatio || 1
-  const W = canvas.offsetWidth, H = canvas.offsetHeight
-  canvas.width = W * dpr; canvas.height = H * dpr
-  const ctx = canvas.getContext('2d')
-  ctx.scale(dpr, dpr)
+export default function ValuationIndex() {
+  const [vi,      setVi]      = useState(null)
+  const [vi2,     setVi2]     = useState(null)
+  const [viHist,  setViHist]  = useState([])
+  const [vi2Hist, setVi2Hist] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const PAD = { left: 0, right: 0, top: 4, bottom: 4 }
-  const cW = W - PAD.left - PAD.right
-  const cH = H - PAD.top - PAD.bottom
-  const n = history.length
-  const step = cW / n
+  useEffect(() => {
+    fetch('/api/signals?history=true')
+      .then(r => r.json())
+      .then(d => {
+        setVi(d.vi ?? null)
+        setVi2(d.vi2 ?? null)
+        const sort = arr => (Array.isArray(arr) ? arr : []).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+        setViHist(sort(d.viDaily))
+        setVi2Hist(sort(d.vi2Daily))
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
 
-  // Value → Y: -3=bottom, +3=top
-  const vY = v => PAD.top + cH - ((v + 3) / 6) * cH
-
-  // Zero line
-  ctx.strokeStyle = '#222'; ctx.lineWidth = 0.5
-  ctx.beginPath(); ctx.moveTo(PAD.left, vY(0)); ctx.lineTo(W - PAD.right, vY(0)); ctx.stroke()
-
-  // Zone band fills (subtle)
-  const bands = [
-    { min: -3, max: -2, color: '#16a34a0a' },
-    { min: -2, max: -1, color: '#22c55e08' },
-    { min:  1, max:  2, color: '#f9731608' },
-    { min:  2, max:  3, color: '#ef44440a' },
-  ]
-  for (const b of bands) {
-    ctx.fillStyle = b.color
-    ctx.fillRect(PAD.left, vY(b.max), cW, vY(b.min) - vY(b.max))
-  }
-
-  // Draw filled area under/above zero
-  const values = history.map(d => parseFloat(d.value))
-
-  // Positive fill (above zero → red tint)
-  ctx.beginPath()
-  ctx.moveTo(PAD.left, vY(0))
-  history.forEach((d, i) => {
-    const x = PAD.left + i * step + step / 2
-    const v = Math.max(0, parseFloat(d.value))
-    i === 0 ? ctx.lineTo(x, vY(v)) : ctx.lineTo(x, vY(v))
-  })
-  ctx.lineTo(PAD.left + (n - 1) * step + step / 2, vY(0))
-  ctx.closePath()
-  ctx.fillStyle = '#ef444415'
-  ctx.fill()
-
-  // Negative fill (below zero → green tint)
-  ctx.beginPath()
-  ctx.moveTo(PAD.left, vY(0))
-  history.forEach((d, i) => {
-    const x = PAD.left + i * step + step / 2
-    const v = Math.min(0, parseFloat(d.value))
-    i === 0 ? ctx.lineTo(x, vY(v)) : ctx.lineTo(x, vY(v))
-  })
-  ctx.lineTo(PAD.left + (n - 1) * step + step / 2, vY(0))
-  ctx.closePath()
-  ctx.fillStyle = '#22c55e15'
-  ctx.fill()
-
-  // Main line — colour-coded per value
-  for (let i = 1; i < n; i++) {
-    const x0 = PAD.left + (i - 1) * step + step / 2
-    const x1 = PAD.left + i * step + step / 2
-    const v0 = values[i - 1], v1 = values[i]
-    ctx.beginPath()
-    ctx.moveTo(x0, vY(v0)); ctx.lineTo(x1, vY(v1))
-    ctx.strokeStyle = getColor(v1)
-    ctx.lineWidth = 1.2
-    ctx.stroke()
-  }
-
-  // Hover crosshair + dot
-  if (hoveredIdx !== null && hoveredIdx >= 0 && hoveredIdx < n) {
-    const x = PAD.left + hoveredIdx * step + step / 2
-    const v = values[hoveredIdx]
-    ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = 0.5; ctx.setLineDash([2, 2])
-    ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H - PAD.bottom); ctx.stroke()
-    ctx.setLineDash([])
-    ctx.beginPath(); ctx.arc(x, vY(v), 2.5, 0, Math.PI * 2)
-    ctx.fillStyle = getColor(v); ctx.fill()
-  }
+  return (
+    <div className="flex flex-col gap-4">
+      <ValuationPanel label="Short-term BTC valuation" current={vi}  history={viHist}  loading={loading} />
+      <div style={{ borderTop: '1px solid #111' }} />
+      <ValuationPanel label="Full-cycle BTC valuation"  current={vi2} history={vi2Hist} loading={loading} />
+    </div>
+  )
 }
