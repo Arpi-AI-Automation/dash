@@ -31,15 +31,9 @@ export default function Home() {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: '#e8e8e8' }}>
       <div style={{ display: 'flex' }}>
-
-        {/* ── MAIN ── */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
-          {/*
-            ── ABOVE THE FOLD ──
-            Col A (35%): Daily Brief → BTC TPI Strat → Valuation lines (fills gap)
-            Col B (65%): BTC Price vs TPI chart → Rotation 1 + 2 side by side
-          */}
+          {/* ROW 1 — 2 col: Col A (35%) Brief+TPI | Col B (65%) Price chart+Rotation */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: '35fr 65fr',
@@ -47,81 +41,43 @@ export default function Home() {
             marginBottom: '16px',
             alignItems: 'start',
           }}>
-
-            {/* Col A */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={cardPad}>
-                <DailyBrief />
-              </div>
-              <div style={cardPad}>
-                <TvSignals />
-              </div>
-              <div style={cardPad}>
-                <ValuationIndex />
-              </div>
+              <div style={cardPad}><DailyBrief /></div>
+              <div style={cardPad}><TvSignals /></div>
             </div>
-
-            {/* Col B */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={cardPad}>
-                <BtcComparison />
-              </div>
+              <div style={cardPad}><ValuationIndex /></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={card}>
-                  <RotationChart />
-                </div>
-                <div style={card}>
-                  <RotationChart2 />
-                </div>
+                <div style={card}><RotationChart /></div>
+                <div style={card}><RotationChart2 /></div>
               </div>
             </div>
-
           </div>
 
-          {/* ── ROW 2: Leverage Verdict + Fear & Greed ── */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '16px',
-            marginBottom: '16px',
-            alignItems: 'start',
-          }}>
-            <div style={cardPad}>
-              <LeverageVerdictCard />
-            </div>
-            <div style={cardPad}>
-              <FearGreed />
-            </div>
+          {/* ROW 2 — Leverage Verdict + Fear & Greed */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
+            <div style={cardPad}><LeverageVerdictCard /></div>
+            <div style={cardPad}><FearGreed /></div>
           </div>
 
-          {/* ── ROW 3: Funding Rate full width ── */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}>
-            <FundingRate />
+          {/* ROW 3 — VS BTC table + Funding Rate */}
+          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
+            <div style={cardPad}><BtcComparison /></div>
+            <div style={cardPad}><FundingRate /></div>
           </div>
 
-          {/* ── ROW 4: Decision Checklist ── */}
-          <div style={{ marginBottom: '16px' }}>
-            <DecisionChecklist />
-          </div>
+          {/* ROW 4 — Checklist */}
+          <div style={{ marginBottom: '16px' }}><DecisionChecklist /></div>
 
-          {/* ── ROW 5: Backtest ── */}
-          <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}>
-            <ChecklistBacktest />
-          </div>
+          {/* ROW 5 — Backtest */}
+          <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}><ChecklistBacktest /></div>
 
         </div>
 
-        {/* ── SIDEBAR ── */}
-        <div style={{
-          width: '220px',
-          flexShrink: 0,
-          borderLeft: '1px solid #1e1e1e',
-          padding: '0 12px 80px',
-          background: '#0a0a0a',
-        }}>
+        {/* SIDEBAR */}
+        <div style={{ width: '220px', flexShrink: 0, borderLeft: '1px solid #1e1e1e', padding: '0 12px 80px', background: '#0a0a0a' }}>
           <SidebarMarkets />
         </div>
-
       </div>
     </div>
   )
