@@ -30,8 +30,7 @@ export default async function Home() {
               <TvSignals />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px', flex: 1 }}>
-                <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>ASSET ROTATION</div>
+              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '0', borderRadius: '2px', flex: 1, overflow: 'hidden' }}>
                 <RotationChart />
               </div>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
