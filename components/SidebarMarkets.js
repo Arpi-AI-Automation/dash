@@ -87,7 +87,6 @@ export default function SidebarMarkets() {
         const d = crypto[c.id] ?? {}
         return (
           <div key={c.id} style={{ padding: '6px 0', borderBottom: '1px solid #181818' }}>
-            {/* Row 1: symbol + price */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
                 {c.symbol}
@@ -96,16 +95,8 @@ export default function SidebarMarkets() {
                 {fmtPrice(d.price)}
               </span>
             </div>
-            {/* Row 2: two deltas */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 8, color: '#333', letterSpacing: '0.04em' }}>vs close</span>
-                <ChgBadge value={d.changeDailyClose} tiny />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 8, color: '#333', letterSpacing: '0.04em' }}>24h</span>
-                <ChgBadge value={d.change24h} tiny />
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 1 }}>
+              <ChgBadge value={d.change24h} tiny />
             </div>
           </div>
         )

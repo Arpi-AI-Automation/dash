@@ -61,7 +61,7 @@ export default function Home() {
         </div>
 
         {/* SIDEBAR */}
-        <div style={{ width: '220px', flexShrink: 0, borderLeft: '1px solid #1e1e1e', padding: '0 12px 80px', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto', background: '#0a0a0a' }}>
+        <div style={{ width: '220px', flexShrink: 0, borderLeft: '1px solid #1e1e1e', padding: '0 12px 80px', background: '#0a0a0a' }}>
           <SidebarMarkets />
         </div>
 
