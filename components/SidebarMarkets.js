@@ -15,7 +15,7 @@ const EQUITIES = ['SPY', 'QQQ']
 
 const UP   = '#26a69a'
 const DOWN = '#ef5350'
-const DIM  = '#555'
+const DIM  = '#444'
 
 function fmtPrice(price, sym) {
   if (price == null) return '—'
@@ -32,20 +32,39 @@ function chgColor(v) {
   return v >= 0 ? UP : DOWN
 }
 
-function ChgBadge({ value, tiny }) {
-  if (value == null) return <span style={{ fontSize: tiny ? 9 : 11, color: DIM }}>—</span>
-  const color = chgColor(value)
+function Chg({ value, size = 11 }) {
+  if (value == null) return <span style={{ fontSize: size, color: DIM }}>—</span>
   return (
-    <span style={{ fontSize: tiny ? 9 : 11, fontWeight: 600, fontFamily: 'monospace', color }}>
+    <span style={{ fontSize: size, fontWeight: 700, fontFamily: 'monospace', color: chgColor(value) }}>
       {value >= 0 ? '+' : ''}{value.toFixed(2)}%
     </span>
   )
 }
 
+// Inline SVG sparkline
+function Spark({ data, color }) {
+  if (!data || data.length < 2) return null
+  const W = 72, H = 24
+  const min = Math.min(...data), max = Math.max(...data)
+  const range = max - min || 1
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * W
+    const y = H - ((v - min) / range) * H
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+  return (
+    <svg width={W} height={H} style={{ display: 'block' }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function SectionLabel({ label }) {
   return (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', color: '#555',
-      padding: '12px 0 4px', borderBottom: '1px solid #161616', marginBottom: 2 }}>
+    <div style={{
+      fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', color: '#555',
+      padding: '14px 0 5px', borderBottom: '1px solid #161616', marginBottom: 4
+    }}>
       {label}
     </div>
   )
@@ -79,69 +98,87 @@ export default function SidebarMarkets() {
   }, [fetchData])
 
   return (
-    <div style={{ padding: '8px 4px 40px' }}>
+    <div style={{ padding: '8px 4px 60px' }}>
 
-      {/* CRYPTO */}
+      {/* ── CRYPTO ── */}
       <SectionLabel label="CRYPTO" />
       {CRYPTO.map(c => {
         const d = crypto[c.id] ?? {}
+        const sparkColor = d.change24h >= 0 ? UP : DOWN
         return (
-          <div key={c.id} style={{ padding: '6px 0', borderBottom: '1px solid #181818' }}>
+          <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
+            {/* Row 1: symbol + price */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#888', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
                 {c.symbol}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
                 {fmtPrice(d.price)}
               </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 1 }}>
-              <ChgBadge value={d.change24h} tiny />
+            {/* Row 2: two deltas */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 3 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span style={{ fontSize: 8, color: '#3a3a3a', letterSpacing: '0.04em', marginBottom: 1 }}>today</span>
+                <Chg value={d.changeDailyClose} size={11} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span style={{ fontSize: 8, color: '#3a3a3a', letterSpacing: '0.04em', marginBottom: 1 }}>24h</span>
+                <Chg value={d.change24h} size={11} />
+              </div>
             </div>
           </div>
         )
       })}
 
-      {/* FOREX */}
+      {/* ── FOREX ── */}
       <SectionLabel label="FOREX" />
       {FOREX.map(sym => {
         const d = markets[sym] ?? {}
+        const sparkColor = (d.change24h ?? 0) >= 0 ? UP : DOWN
         return (
-          <div key={sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #181818' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
-              {sym.replace('/', '')}
-            </span>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+          <div key={sym} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#888', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+                {sym.replace('/', '')}
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
                 {fmtPrice(d.price, sym)}
-              </div>
-              <ChgBadge value={d.change24h} />
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+              <Spark data={d.spark7d} color={sparkColor} />
+              <Chg value={d.change24h} size={11} />
             </div>
           </div>
         )
       })}
 
-      {/* EQUITIES */}
+      {/* ── EQUITIES ── */}
       <SectionLabel label="EQUITIES" />
       {EQUITIES.map(sym => {
         const d = markets[sym] ?? {}
+        const sparkColor = (d.change24h ?? 0) >= 0 ? UP : DOWN
         return (
-          <div key={sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #181818' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
-              {sym}
-            </span>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+          <div key={sym} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#888', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+                {sym}
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
                 {fmtPrice(d.price)}
-              </div>
-              <ChgBadge value={d.change24h} />
+              </span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+              <Spark data={d.spark7d} color={sparkColor} />
+              <Chg value={d.change24h} size={11} />
             </div>
           </div>
         )
       })}
 
       {updated && (
-        <div style={{ fontSize: 9, color: '#2a2a2a', marginTop: 12, fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 9, color: '#2a2a2a', marginTop: 14, fontFamily: 'monospace' }}>
           {updated.toLocaleTimeString('en-US', { hour12: false })}
         </div>
       )}

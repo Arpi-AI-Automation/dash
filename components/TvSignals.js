@@ -503,7 +503,7 @@ export default function TvSignals() {
         <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-gray-500 uppercase tracking-wider">
-              BTC Price + ORPI1 Equity Curve
+              BTC Price vs. TPI Strategies
             </div>
             <div className="flex gap-3 text-xs text-gray-600">
               <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-400 rounded" /> Long</span>

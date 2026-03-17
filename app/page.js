@@ -28,7 +28,6 @@ export default function Home() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
             {/* Left: BTC strategy */}
             <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
-              <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>BTC STRATEGY · ORPI1</div>
               <TvSignals />
             </div>
             {/* Right: Rotation + F&G stacked */}
