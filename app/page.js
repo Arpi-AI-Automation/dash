@@ -1,16 +1,20 @@
+import dynamic from 'next/dynamic'
 import CryptoTicker from '../components/CryptoTicker'
 import SidebarMarkets from '../components/SidebarMarkets'
-import TvSignals from '../components/TvSignals'
-import RotationChart from '../components/RotationChart'
 import DecisionChecklist from '../components/DecisionChecklist'
 import ChecklistBacktest from '../components/ChecklistBacktest'
-import FearGreed from '../components/FearGreed'
 import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
+import FearGreed from '../components/FearGreed'
 
-export const dynamic = 'force-dynamic'
+// Client-only — prevents SSR duplicate render
+const TvSignals    = dynamic(() => import('../components/TvSignals'),    { ssr: false })
+const RotationChart = dynamic(() => import('../components/RotationChart'), { ssr: false })
 
-export default async function Home() {
+export const dynamic_ = 'force-dynamic'
+export const revalidate = 0
+
+export default function Home() {
   return (
     <div style={{ minHeight: '100vh', background: '#080808', color: '#e8e8e8' }}>
 
@@ -25,12 +29,14 @@ export default async function Home() {
 
           {/* SIGNAL ROW */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+            {/* Left: BTC strategy */}
             <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
               <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>BTC STRATEGY · ORPI1</div>
               <TvSignals />
             </div>
+            {/* Right: Rotation + F&G stacked */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '0', borderRadius: '2px', flex: 1, overflow: 'hidden' }}>
+              <div style={{ border: '1px solid #161616', background: '#0a0a0a', borderRadius: '2px', flex: 1, overflow: 'hidden' }}>
                 <RotationChart />
               </div>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
