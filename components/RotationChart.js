@@ -275,38 +275,50 @@ export default function RotationChart() {
   return (
     <div className="bg-[#0f172a] border border-gray-800 rounded-lg overflow-hidden">
 
-      {/* Header: dominant asset + legend */}
-      <div className="px-4 pt-3 pb-2 border-b border-gray-800">
-        {/* Dominant asset callout */}
+      {/* Header */}
+      <div className="px-4 pt-3 pb-3 border-b border-gray-800">
+        {/* Title row */}
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-600 font-mono text-xs tracking-widest">HOLDING</span>
-            {rotation ? (
-              <span
-                className="px-3 py-1 text-sm font-bold font-mono rounded-sm"
-                style={{ background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55` }}
-              >
-                {assetLabel}
-              </span>
-            ) : (
-              <span className="text-gray-700 font-mono text-xs">awaiting webhook</span>
-            )}
-          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#e0e0e0', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
+            ASSET ROTATION <span style={{ color: '#f7931a' }}>SYSTEM 1</span>
+          </span>
           {rotation?.updated_at && (
-            <span className="text-gray-700 text-xs font-mono">
+            <span style={{ fontSize: 10, color: '#555', fontFamily: 'monospace' }}>
               {new Date(rotation.updated_at).toUTCString().slice(0, 16)}
             </span>
           )}
         </div>
+        {/* Dominant asset */}
+        <div className="flex items-center gap-2 mb-3">
+          <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace', letterSpacing: '0.1em' }}>DOMINANT ASSET</span>
+          {rotation ? (
+            <span style={{
+              fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
+              padding: '2px 10px', borderRadius: 2,
+              background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
+            }}>
+              {assetLabel}
+            </span>
+          ) : (
+            <span style={{ fontSize: 12, color: '#888', fontFamily: 'monospace', fontWeight: 600 }}>
+              {assetLabel !== '—' ? assetLabel : 'awaiting data'}
+            </span>
+          )}
+        </div>
         {/* Color legend */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px' }}>
           {ASSETS.map(a => (
-            <div key={a.key} className="flex items-center gap-1">
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
-                boxShadow: a.key === currentAsset ? `0 0 5px ${a.color}` : 'none',
-                opacity: a.key === currentAsset ? 1 : 0.5 }} />
-              <span className="font-mono text-[10px]"
-                style={{ color: a.key === currentAsset ? a.color : '#4b5563', fontWeight: a.key === currentAsset ? 700 : 400 }}>
+            <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
+                boxShadow: a.key === currentAsset ? `0 0 6px ${a.color}` : 'none',
+                opacity: a.key === currentAsset ? 1 : 0.45
+              }} />
+              <span style={{
+                fontFamily: 'monospace', fontSize: 11,
+                color: a.key === currentAsset ? a.color : '#666',
+                fontWeight: a.key === currentAsset ? 700 : 400
+              }}>
                 {a.label}
               </span>
             </div>
@@ -369,9 +381,15 @@ export default function RotationChart() {
         </div>
       )}
 
-      {!scores && (
-        <div className="px-4 py-4 border-t border-gray-800 text-gray-600 text-xs font-mono text-center">
-          Scores display after first webhook · set up TV alert to fire daily
+      {!scores && rotation && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1f2937', fontFamily: 'monospace', fontSize: 12, color: '#888', textAlign: 'center' }}>
+          Dominant asset: <span style={{ color: assetColor, fontWeight: 700 }}>{assetLabel}</span>
+          <span style={{ color: '#555', marginLeft: 8 }}>· scores update on next webhook</span>
+        </div>
+      )}
+      {!scores && !rotation && (
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #1f2937', fontFamily: 'monospace', fontSize: 12, color: '#555', textAlign: 'center' }}>
+          Awaiting first webhook · set up TV alert to fire daily
         </div>
       )}
 
