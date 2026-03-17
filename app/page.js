@@ -8,8 +8,9 @@ import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
 
 // Client-only — prevents SSR duplicate render
-const TvSignals    = dynamic(() => import('../components/TvSignals'),    { ssr: false })
-const RotationChart = dynamic(() => import('../components/RotationChart'), { ssr: false })
+const TvSignals     = dynamic(() => import('../components/TvSignals'),     { ssr: false })
+const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
+const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { ssr: false })
 
 export const dynamic_ = 'force-dynamic'
 export const revalidate = 0
@@ -35,10 +36,15 @@ export default function Home() {
                 <LeverageVerdictCard />
               </div>
             </div>
-            {/* Right: Rotation + F&G stacked */}
+            {/* Right: Rotation charts (side by side) + F&G */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ border: '1px solid #161616', background: '#0a0a0a', borderRadius: '2px', flex: 1, overflow: 'hidden' }}>
-                <RotationChart />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ border: '1px solid #161616', background: '#0a0a0a', borderRadius: '2px', overflow: 'hidden' }}>
+                  <RotationChart />
+                </div>
+                <div style={{ border: '1px solid #161616', background: '#0a0a0a', borderRadius: '2px', overflow: 'hidden' }}>
+                  <RotationChart2 />
+                </div>
               </div>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
                 <FearGreed />
