@@ -33,43 +33,57 @@ export default function Home() {
       <div style={{ display: 'flex' }}>
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
-          {/* ROW 1 — 2 col: Col A (35%) Brief+TPI | Col B (65%) Price chart+Rotation */}
+          {/*
+            ROW 1 — 3 columns above the fold:
+            Col A (narrow): Daily Brief + BTC TPI Strat
+            Col B (wide):   BTC Price vs TPI chart (ValuationIndex — no card padding, component owns its chrome)
+            Col C (wide):   Rotation System 2 (has RS Scores inside)
+          */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '35fr 65fr',
+            gridTemplateColumns: '30fr 40fr 30fr',
             gap: '16px',
             marginBottom: '16px',
             alignItems: 'start',
           }}>
+            {/* Col A */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}><DailyBrief /></div>
               <div style={cardPad}><TvSignals /></div>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={cardPad}><ValuationIndex /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={card}><RotationChart /></div>
-                <div style={card}><RotationChart2 /></div>
-              </div>
+
+            {/* Col B: price chart — no extra padding wrapper, component fills naturally */}
+            <div style={card}>
+              <ValuationIndex />
+            </div>
+
+            {/* Col C: Rotation System 2 (contains RS Scores) */}
+            <div style={card}>
+              <RotationChart2 />
             </div>
           </div>
 
-          {/* ROW 2 — Leverage Verdict + Fear & Greed */}
+          {/* ROW 2 — Rotation System 1 full width */}
+          <div style={{ ...card, marginBottom: '16px' }}>
+            <RotationChart />
+          </div>
+
+          {/* ROW 3 — Leverage Verdict + Fear & Greed */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
             <div style={cardPad}><LeverageVerdictCard /></div>
             <div style={cardPad}><FearGreed /></div>
           </div>
 
-          {/* ROW 3 — VS BTC table + Funding Rate */}
+          {/* ROW 4 — VS BTC table + Funding Rate */}
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
             <div style={cardPad}><BtcComparison /></div>
             <div style={cardPad}><FundingRate /></div>
           </div>
 
-          {/* ROW 4 — Checklist */}
+          {/* ROW 5 — Checklist */}
           <div style={{ marginBottom: '16px' }}><DecisionChecklist /></div>
 
-          {/* ROW 5 — Backtest */}
+          {/* ROW 6 — Backtest */}
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}><ChecklistBacktest /></div>
 
         </div>
