@@ -34,38 +34,36 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
           {/*
-            ROW 1 — 3 columns above the fold:
-            Col A (narrow): Daily Brief + BTC TPI Strat
-            Col B (wide):   BTC Price vs TPI chart (ValuationIndex — no card padding, component owns its chrome)
-            Col C (wide):   Rotation System 2 (has RS Scores inside)
+            ROW 1 — 2 col: Brief+TPI (left, 30%) | BTC Price chart (right, 70%)
+            ValuationIndex needs width to render — give it the majority of the page
           */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '30fr 40fr 30fr',
+            gridTemplateColumns: '30fr 70fr',
             gap: '16px',
             marginBottom: '16px',
             alignItems: 'start',
           }}>
-            {/* Col A */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}><DailyBrief /></div>
               <div style={cardPad}><TvSignals /></div>
             </div>
-
-            {/* Col B: price chart — no extra padding wrapper, component fills naturally */}
-            <div style={card}>
-              <ValuationIndex />
-            </div>
-
-            {/* Col C: Rotation System 2 (contains RS Scores) */}
-            <div style={card}>
-              <RotationChart2 />
-            </div>
+            {/* ValuationIndex owns 70% width — chart should render fully above fold */}
+            <div style={card}><ValuationIndex /></div>
           </div>
 
-          {/* ROW 2 — Rotation System 1 full width */}
-          <div style={{ ...card, marginBottom: '16px' }}>
-            <RotationChart />
+          {/*
+            ROW 2 — Rotation 1 (left 40%) | Rotation 2 + RS Scores (right 60%)
+          */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '40fr 60fr',
+            gap: '16px',
+            marginBottom: '16px',
+            alignItems: 'start',
+          }}>
+            <div style={card}><RotationChart /></div>
+            <div style={card}><RotationChart2 /></div>
           </div>
 
           {/* ROW 3 — Leverage Verdict + Fear & Greed */}
