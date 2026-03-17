@@ -272,6 +272,20 @@ export async function POST(request) {
       })
     }
 
+    // ── Valuation Index ─────────────────────────────────────────────────────
+    // TradingView message: {"script":"vi","value":{{plot_0}}}
+    if (script === 'vi') {
+      const value = parseFloat(body.value)
+      if (isNaN(value)) return Response.json({ error: 'Invalid value' }, { status: 400 })
+      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
+      const signal = { value, ts: timestamp, updated_at: new Date().toISOString(), date: dateKey }
+      await Promise.all([
+        redisSet('signal:vi', signal),
+        redisHSet('vi:daily', dateKey, signal),
+      ])
+      return Response.json({ ok: true, script: 'vi', value, date: dateKey })
+    }
+
     return Response.json({ error: 'Unknown script type' }, { status: 400 })
   } catch (err) {
     console.error('Webhook error:', err)

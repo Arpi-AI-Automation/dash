@@ -8,9 +8,10 @@ import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
 
 // Client-only — prevents SSR duplicate render
-const TvSignals     = dynamic(() => import('../components/TvSignals'),     { ssr: false })
+const TvSignals      = dynamic(() => import('../components/TvSignals'),      { ssr: false })
 const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
 const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { ssr: false })
+const ValuationIndex = dynamic(() => import('../components/ValuationIndex'), { ssr: false })
 
 export const dynamic_ = 'force-dynamic'
 export const revalidate = 0
@@ -31,6 +32,9 @@ export default function Home() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
                 <TvSignals />
+                <div style={{ borderTop: '1px solid #111', marginTop: '12px', paddingTop: '12px' }}>
+                  <ValuationIndex />
+                </div>
               </div>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
                 <LeverageVerdictCard />
