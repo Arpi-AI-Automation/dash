@@ -13,8 +13,8 @@ const CRYPTO = [
 const FOREX    = ['AUD/USD', 'AUD/JPY', 'EUR/JPY', 'GBP/JPY', 'USD/JPY']
 const EQUITIES = ['SPY', 'QQQ']
 
-const UP   = '#26a69a'
-const DOWN = '#ef5350'
+const UP   = '#22c55e'
+const DOWN = '#ef4444'
 const DIM  = '#444'
 
 function fmtPrice(price, sym) {
@@ -32,18 +32,18 @@ function chgColor(v) {
   return v >= 0 ? UP : DOWN
 }
 
-function Chg({ value, size = 11 }) {
-  if (value == null) return <span style={{ fontSize: size, color: DIM }}>—</span>
+function ChgValue({ value }) {
+  if (value == null) return <span style={{ fontSize: 20, fontWeight: 800, color: DIM, fontFamily: 'monospace' }}>—</span>
+  const color = chgColor(value)
   return (
-    <span style={{ fontSize: size, fontWeight: 700, fontFamily: 'monospace', color: chgColor(value) }}>
+    <span style={{ fontSize: 20, fontWeight: 800, fontFamily: 'monospace', color }}>
       {value >= 0 ? '+' : ''}{value.toFixed(2)}%
     </span>
   )
 }
 
-// Inline SVG sparkline
 function Spark({ data, color }) {
-  if (!data || data.length < 2) return null
+  if (!data || data.length < 2) return <div style={{ width: 72, height: 24 }} />
   const W = 72, H = 24
   const min = Math.min(...data), max = Math.max(...data)
   const range = max - min || 1
@@ -62,10 +62,66 @@ function Spark({ data, color }) {
 function SectionLabel({ label }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 700, letterSpacing: '0.15em', color: '#555',
-      padding: '14px 0 5px', borderBottom: '1px solid #161616', marginBottom: 4
+      fontSize: 9,
+      fontWeight: 700,
+      letterSpacing: '0.2em',
+      color: '#3a3a3a',
+      padding: '18px 0 8px',
+      borderBottom: '1px solid #1a1a1a',
+      marginBottom: 2,
+      textTransform: 'uppercase',
     }}>
       {label}
+    </div>
+  )
+}
+
+// Card-style row matching the new format from screenshot
+function PriceCard({ symbol, price, leftLabel, leftValue, rightLabel, rightValue, sym }) {
+  return (
+    <div style={{
+      padding: '10px 0',
+      borderBottom: '1px solid #141414',
+    }}>
+      {/* Row 1: symbol (left) + price (right, large) */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+        <span style={{
+          fontSize: 13,
+          fontWeight: 800,
+          color: '#e5e5e5',
+          fontFamily: 'monospace',
+          letterSpacing: '0.06em',
+        }}>
+          {symbol}
+        </span>
+        <span style={{
+          fontSize: 18,
+          fontWeight: 800,
+          color: '#ffffff',
+          fontFamily: 'monospace',
+          letterSpacing: '-0.01em',
+        }}>
+          {fmtPrice(price, sym)}
+        </span>
+      </div>
+
+      {/* Row 2: two delta blocks side by side */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        {/* Left delta */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+          <span style={{ fontSize: 9, color: '#555', letterSpacing: '0.05em', textTransform: 'lowercase' }}>
+            {leftLabel}
+          </span>
+          <ChgValue value={leftValue} />
+        </div>
+        {/* Right delta */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+          <span style={{ fontSize: 9, color: '#555', letterSpacing: '0.05em', textTransform: 'lowercase' }}>
+            {rightLabel}
+          </span>
+          <ChgValue value={rightValue} />
+        </div>
+      </div>
     </div>
   )
 }
@@ -98,91 +154,83 @@ export default function SidebarMarkets() {
   }, [fetchData])
 
   return (
-    <div style={{ padding: '8px 4px 60px' }}>
+    <div style={{ padding: '8px 6px 60px', background: '#0a0a0a', minHeight: '100%' }}>
 
       {/* ── CRYPTO ── */}
-      <SectionLabel label="CRYPTO" />
+      <SectionLabel label="Crypto" />
       {CRYPTO.map(c => {
         const d = crypto[c.id] ?? {}
-        const sparkColor = d.change24h >= 0 ? UP : DOWN
         return (
-          <div key={c.id} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
-            {/* Row 1: symbol + price */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#888', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
-                {c.symbol}
-              </span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-                {fmtPrice(d.price)}
-              </span>
-            </div>
-            {/* Row 2: two deltas */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 3 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 8, color: '#3a3a3a', letterSpacing: '0.04em', marginBottom: 1 }}>today</span>
-                <Chg value={d.changeDailyClose} size={11} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 8, color: '#3a3a3a', letterSpacing: '0.04em', marginBottom: 1 }}>24h</span>
-                <Chg value={d.change24h} size={11} />
-              </div>
-            </div>
-          </div>
+          <PriceCard
+            key={c.id}
+            symbol={c.symbol}
+            price={d.price}
+            leftLabel="last 24h"
+            leftValue={d.change24h}
+            rightLabel="today"
+            rightValue={d.changeDailyClose}
+          />
         )
       })}
 
       {/* ── FOREX ── */}
-      <SectionLabel label="FOREX" />
+      <SectionLabel label="Forex" />
       {FOREX.map(sym => {
         const d = markets[sym] ?? {}
         const spark = d.spark7d
         const chg7d = (spark?.length >= 2) ? ((d.price - spark[0]) / spark[0]) * 100 : null
         const sparkColor = chg7d == null ? DIM : chg7d >= 0 ? UP : DOWN
         return (
-          <div key={sym} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#888', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+          <div key={sym} style={{ padding: '10px 0', borderBottom: '1px solid #141414' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#e5e5e5', fontFamily: 'monospace', letterSpacing: '0.06em' }}>
                 {sym.replace('/', '')}
               </span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: '#ffffff', fontFamily: 'monospace' }}>
                 {fmtPrice(d.price, sym)}
               </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Spark data={spark} color={sparkColor} />
-              <Chg value={chg7d} size={11} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                <span style={{ fontSize: 9, color: '#555', letterSpacing: '0.05em' }}>7d</span>
+                <ChgValue value={chg7d} />
+              </div>
             </div>
           </div>
         )
       })}
 
       {/* ── EQUITIES ── */}
-      <SectionLabel label="EQUITIES" />
+      <SectionLabel label="Equities" />
       {EQUITIES.map(sym => {
         const d = markets[sym] ?? {}
         const spark = d.spark7d
         const chg7d = (spark?.length >= 2) ? ((d.price - spark[0]) / spark[0]) * 100 : null
         const sparkColor = chg7d == null ? DIM : chg7d >= 0 ? UP : DOWN
         return (
-          <div key={sym} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: '#888', fontFamily: 'monospace', letterSpacing: '0.05em' }}>
+          <div key={sym} style={{ padding: '10px 0', borderBottom: '1px solid #141414' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#e5e5e5', fontFamily: 'monospace', letterSpacing: '0.06em' }}>
                 {sym}
               </span>
-              <span style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+              <span style={{ fontSize: 18, fontWeight: 800, color: '#ffffff', fontFamily: 'monospace' }}>
                 {fmtPrice(d.price)}
               </span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Spark data={spark} color={sparkColor} />
-              <Chg value={chg7d} size={11} />
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+                <span style={{ fontSize: 9, color: '#555', letterSpacing: '0.05em' }}>7d</span>
+                <ChgValue value={chg7d} />
+              </div>
             </div>
           </div>
         )
       })}
 
       {updated && (
-        <div style={{ fontSize: 9, color: '#2a2a2a', marginTop: 14, fontFamily: 'monospace' }}>
+        <div style={{ fontSize: 9, color: '#222', marginTop: 16, fontFamily: 'monospace', textAlign: 'right' }}>
           {updated.toLocaleTimeString('en-US', { hour12: false })}
         </div>
       )}
