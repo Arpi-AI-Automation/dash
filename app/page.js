@@ -6,13 +6,13 @@ import ChecklistBacktest from '../components/ChecklistBacktest'
 import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
+import ValuationIndex from '../components/ValuationIndex'
 
-// TvSignals    = BTC TPI Strat gauge + BTC Price vs TPI chart (tall component)
-// ValuationIndex = Short-term / Full-cycle BTC valuation gauge panels
-const TvSignals      = dynamic(() => import('../components/TvSignals'),      { ssr: false })
+// Split imports — gauge and chart now placeable independently
+const TvSignalGauge = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })), { ssr: false })
+const TvSignalChart = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalChart })), { ssr: false })
 const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
 const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { ssr: false })
-const ValuationIndex = dynamic(() => import('../components/ValuationIndex'), { ssr: false })
 
 export const dynamic_ = 'force-dynamic'
 export const revalidate = 0
@@ -36,9 +36,9 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
           {/*
-            ROW 1 — 2 col:
-            Col A (30%): Daily Brief → ValuationIndex gauges → nothing else
-            Col B (70%): TvSignals (BTC TPI gauge + BTC Price vs TPI chart — needs full width)
+            ROW 1 — above the fold
+            Col A (30%): Daily Brief → BTC TPI Gauge
+            Col B (70%): BTC Price chart → Rotation 1 + 2
           */}
           <div style={{
             display: 'grid',
@@ -47,35 +47,37 @@ export default function Home() {
             marginBottom: '16px',
             alignItems: 'start',
           }}>
+            {/* Col A */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}><DailyBrief /></div>
-              <div style={cardPad}><ValuationIndex /></div>
+              <div><TvSignalGauge /></div>
             </div>
-            <div style={card}><TvSignals /></div>
+
+            {/* Col B */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div><TvSignalChart /></div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={card}><RotationChart /></div>
+                <div style={card}><RotationChart2 /></div>
+              </div>
+            </div>
           </div>
 
-          {/* ROW 2 — Rotation System 1 (40%) + Rotation System 2 + RS Scores (60%) */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '40fr 60fr',
-            gap: '16px',
-            marginBottom: '16px',
-            alignItems: 'start',
-          }}>
-            <div style={card}><RotationChart /></div>
-            <div style={card}><RotationChart2 /></div>
-          </div>
-
-          {/* ROW 3 — Leverage Verdict + Fear & Greed */}
+          {/* ROW 2 — Valuation Index + Leverage Verdict */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
+            <div style={cardPad}><ValuationIndex /></div>
             <div style={cardPad}><LeverageVerdictCard /></div>
-            <div style={cardPad}><FearGreed /></div>
           </div>
 
-          {/* ROW 4 — VS BTC table + Funding Rate */}
-          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
-            <div style={cardPad}><BtcComparison /></div>
+          {/* ROW 3 — Fear & Greed + Funding Rate */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
+            <div style={cardPad}><FearGreed /></div>
             <div style={cardPad}><FundingRate /></div>
+          </div>
+
+          {/* ROW 4 — VS BTC table */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}>
+            <BtcComparison />
           </div>
 
           {/* ROW 5 — Checklist */}
