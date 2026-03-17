@@ -273,7 +273,7 @@ export default function RotationChart() {
     : ASSETS
 
   return (
-    <div className="bg-[#0f172a] border border-gray-800 rounded-lg overflow-hidden">
+    <div style={{ borderTop: "1px solid #1a1a1a" }}>
 
       {/* Header */}
       <div className="px-4 pt-3 pb-3 border-b border-gray-800">
