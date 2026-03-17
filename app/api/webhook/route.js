@@ -190,52 +190,55 @@ export async function POST(request) {
     }
 
     // ── System 2: RS Dynamic Hedging / viResearch style ─────────────────────
-    // Supports both scored (with allocation %) and plain (asset name only) payloads.
-    // TradingView alert message (full):
-    //   {"script":"s2","asset":"ETHUSD","btc_score":"0","eth_score":"6","sol_score":"2",
-    //    "sui_score":"2","xrp_score":"-4","bnb_score":"0","paxg_score":"-6",
-    //    "btc_alloc":"0","eth_alloc":"60","sol_alloc":"0","sui_alloc":"0",
-    //    "xrp_alloc":"0","bnb_alloc":"0","paxg_alloc":"40"}
-    // Minimal fallback (if plot vars don't resolve):
-    //   {"script":"s2","asset":"ETHUSD"}
+    // Compact TradingView message (fits 300 char limit):
+    //   {"script":"s2","sc":"{{plot_0}},{{plot_1}},{{plot_2}},{{plot_3}},{{plot_4}},{{plot_5}},{{plot_6}}","al":"{{plot_7}},{{plot_8}},{{plot_9}},{{plot_10}},{{plot_11}},{{plot_12}},{{plot_13}}"}
+    // Asset order: BTC, ETH, SOL, SUI, XRP, BNB, PAXG
     if (script === 's2') {
-      if (!asset) {
-        return Response.json({ error: 'Missing asset field' }, { status: 400 })
+      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
+      const KEYS = ['btc','eth','sol','sui','xrp','bnb','paxg']
+
+      // ── Parse compact format: sc="0,6,2,2,-4,-4,-6" al="0,60,0,0,0,0,40"
+      let scores = null, alloc = null
+
+      if (body.sc != null) {
+        const vals = String(body.sc).split(',').map(Number)
+        scores = Object.fromEntries(KEYS.map((k, i) => [k, vals[i] ?? 0]))
+      }
+      if (body.al != null) {
+        const vals = String(body.al).split(',').map(Number)
+        alloc = Object.fromEntries(KEYS.map((k, i) => [k, vals[i] ?? 0]))
       }
 
-      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
+      // ── Fallback: verbose format (btc_score, eth_alloc etc.)
+      if (!scores && body.btc_score != null) {
+        scores = Object.fromEntries(KEYS.map(k => [k, parseFloat(body[k + '_score']) || 0]))
+      }
+      if (!alloc && body.btc_alloc != null) {
+        alloc = Object.fromEntries(KEYS.map(k => [k, parseFloat(body[k + '_alloc']) || 0]))
+      }
 
-      // Parse scores if provided (null if not sent)
-      const hasScores = body.eth_score != null || body.btc_score != null
-      const scores = hasScores ? {
-        btc:  parseFloat(body.btc_score)  || 0,
-        eth:  parseFloat(body.eth_score)  || 0,
-        sol:  parseFloat(body.sol_score)  || 0,
-        sui:  parseFloat(body.sui_score)  || 0,
-        xrp:  parseFloat(body.xrp_score)  || 0,
-        bnb:  parseFloat(body.bnb_score)  || 0,
-        paxg: parseFloat(body.paxg_score) || 0,
-      } : null
-
-      const hasAlloc = body.eth_alloc != null || body.btc_alloc != null
-      const alloc = hasAlloc ? {
-        btc:  parseFloat(body.btc_alloc)  || 0,
-        eth:  parseFloat(body.eth_alloc)  || 0,
-        sol:  parseFloat(body.sol_alloc)  || 0,
-        sui:  parseFloat(body.sui_alloc)  || 0,
-        xrp:  parseFloat(body.xrp_alloc)  || 0,
-        bnb:  parseFloat(body.bnb_alloc)  || 0,
-        paxg: parseFloat(body.paxg_alloc) || 0,
-      } : null
+      // ── Derive dominant asset from alloc (highest %), else scores, else body.asset
+      let dominantAsset = asset?.trim() || 'USD'
+      if (alloc) {
+        const top = KEYS.reduce((a, b) => (alloc[a] ?? 0) >= (alloc[b] ?? 0) ? a : b)
+        if ((alloc[top] ?? 0) > 0) dominantAsset = top.toUpperCase()
+      } else if (scores) {
+        const top = KEYS.reduce((a, b) => (scores[a] ?? 0) >= (scores[b] ?? 0) ? a : b)
+        dominantAsset = top.toUpperCase()
+      }
 
       const signal = {
-        asset:      asset.trim(),
-        prev_asset: prev_asset || null,
+        asset:      dominantAsset,
+        prev_asset: null,
         scores,
         alloc,
         ts:         timestamp,
         updated_at: new Date().toISOString(),
       }
+
+      const prevS2     = await redisGet('signal:s2')
+      signal.prev_asset = prevS2?.asset || null
+      const isRotation  = !prevS2 || prevS2.asset !== signal.asset
 
       const dailyEntry = {
         asset:  signal.asset,
@@ -244,9 +247,6 @@ export async function POST(request) {
         ts:     timestamp,
         date:   dateKey,
       }
-
-      const prevS2     = await redisGet('signal:s2')
-      const isRotation = !prevS2 || prevS2.asset !== signal.asset
 
       const writes = [
         redisSet('signal:s2', signal),
@@ -268,7 +268,7 @@ export async function POST(request) {
       return Response.json({
         ok: true, script: 's2', asset: signal.asset,
         date: dateKey, rotation: isRotation,
-        hasScores, hasAlloc,
+        hasScores: !!scores, hasAlloc: !!alloc,
       })
     }
 
