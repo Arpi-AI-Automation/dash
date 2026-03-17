@@ -68,6 +68,7 @@ export async function GET(request) {
     s2Daily, s2Transitions,
     checklistDaily,
     viSignal, viDaily,
+    vi2Signal, vi2Daily,
   ] = await Promise.all([
     redisGet('signal:btc'),
     redisGet('signal:rotation'),
@@ -83,6 +84,8 @@ export async function GET(request) {
     includeHistory ? redisHGetAll('btc:checklist-daily')    : Promise.resolve([]),
     redisGet('signal:vi'),
     includeHistory ? redisHGetAll('vi:daily')               : Promise.resolve([]),
+    redisGet('signal:vi2'),
+    includeHistory ? redisHGetAll('vi2:daily')              : Promise.resolve([]),
   ])
 
   const btcHistory = dailyHistory.length > 0 ? dailyHistory : legacyHistory
@@ -102,6 +105,8 @@ export async function GET(request) {
     checklistDaily,         // Daily checklist scores (front-test data)
     vi: viSignal,           // Current VI value
     viDaily,               // VI daily history
+    vi2: vi2Signal,         // Current VI-2 value
+    vi2Daily,              // VI-2 daily history
     meta: {
       btc_daily_count:            dailyHistory.length,
       btc_transitions_count:      transitions.length,
@@ -111,6 +116,7 @@ export async function GET(request) {
       s2_daily_count:             s2Daily.length,
       s2_transitions_count:       s2Transitions.length,
       vi_daily_count:             viDaily.length,
+      vi2_daily_count:            vi2Daily.length,
       source: dailyHistory.length > 0 ? 'btc:daily hash' : 'history:btc list (legacy)',
     },
     fetched_at: new Date().toISOString(),
