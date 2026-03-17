@@ -53,9 +53,22 @@ function normaliseAsset(raw) {
   return MAP[s] ?? s
 }
 
+function assetKey(raw) {
+  if (!raw) return 'usd'
+  const s = raw.toLowerCase()
+  if (s.includes('bnb'))  return 'bnb'
+  if (s.includes('eth'))  return 'eth'
+  if (s.includes('sol'))  return 'sol'
+  if (s.includes('xrp'))  return 'xrp'
+  if (s.includes('paxg')) return 'paxg'
+  if (s.includes('sui'))  return 'sui'
+  return 'usd'
+}
+
 function fmtS1(signal) {
-  if (!signal?.asset) return 'No data yet'
-  return normaliseAsset(signal.asset) ?? signal.asset
+  // Match RotationChart behaviour: defaults to USD when no signal
+  const key = assetKey(signal?.asset)
+  return key.toUpperCase().replace('PAXG', 'GOLD')
 }
 
 function fmtS2(signal) {
