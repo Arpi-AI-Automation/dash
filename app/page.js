@@ -37,8 +37,8 @@ export default function Home() {
 
           {/*
             ── ABOVE THE FOLD ──
-            Col A (35%): Daily Brief + BTC TPI Strat stacked
-            Col B (65%): BTC Price chart (top) + Rotation 1 & 2 side by side (bottom)
+            Col A (35%): Daily Brief → BTC TPI Strat → Valuation lines (fills gap)
+            Col B (65%): BTC Price vs TPI chart → Rotation 1 + 2 side by side
           */}
           <div style={{
             display: 'grid',
@@ -48,7 +48,7 @@ export default function Home() {
             alignItems: 'start',
           }}>
 
-            {/* Col A: Daily Brief + BTC TPI stacked, no gap waste */}
+            {/* Col A */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}>
                 <DailyBrief />
@@ -56,12 +56,15 @@ export default function Home() {
               <div style={cardPad}>
                 <TvSignals />
               </div>
-            </div>
-
-            {/* Col B: Price chart on top, then Rotation 1 + 2 side by side */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}>
                 <ValuationIndex />
+              </div>
+            </div>
+
+            {/* Col B */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={cardPad}>
+                <BtcComparison />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={card}>
@@ -91,20 +94,9 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ── ROW 3: BTC Comparison (wide) + Funding Rate (narrow) ── */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '3fr 2fr',
-            gap: '16px',
-            marginBottom: '16px',
-            alignItems: 'start',
-          }}>
-            <div style={cardPad}>
-              <BtcComparison />
-            </div>
-            <div style={cardPad}>
-              <FundingRate />
-            </div>
+          {/* ── ROW 3: Funding Rate full width ── */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}>
+            <FundingRate />
           </div>
 
           {/* ── ROW 4: Decision Checklist ── */}
