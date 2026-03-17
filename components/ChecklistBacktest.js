@@ -2,10 +2,9 @@
 import { useEffect, useRef, useState } from 'react'
 import SectionHeader from './SectionHeader'
 
-// TPI transitions — enter dates where your TPI changed state.
-// Sorted ascending. State persists until next entry.
-// UPDATE THIS ARRAY with your actual TPI history.
-const TPI_TRANSITIONS = [
+// Hardcoded historical TPI transitions (pre-webhook era)
+// Live transitions from Redis will be merged on top of these
+const TPI_TRANSITIONS_HISTORICAL = [
   {"date":"2024-12-07","state":"LONG"},
   {"date":"2024-12-21","state":"SHORT"},
   {"date":"2025-01-16","state":"LONG"},
@@ -27,12 +26,15 @@ const TPI_TRANSITIONS = [
 ]
 
 async function fetchAllData() {
-  const [priceRes, fgRes, fundingRes] = await Promise.all([
+  // Fetch market data + signals (TPI transitions + stored daily scores) in parallel
+  const [priceRes, fgRes, fundingRes, signalsRes] = await Promise.all([
     fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=101&interval=daily'),
     fetch('https://api.alternative.me/fng/?limit=101&format=json'),
     fetch('https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=200'),
+    fetch('/api/signals?history=true').catch(() => null),
   ])
   const [priceData, fgData, fundingData] = await Promise.all([priceRes.json(), fgRes.json(), fundingRes.json()])
+  const signalsData = signalsRes ? await signalsRes.json().catch(() => null) : null
 
   const prices = priceData.prices.map(([ts, price]) => ({
     date: new Date(ts).toISOString().slice(0, 10), price,
@@ -46,7 +48,42 @@ async function fetchAllData() {
     const date = new Date(parseInt(item.fundingRateTimestamp)).toISOString().slice(0, 10)
     if (!fundingMap[date]) fundingMap[date] = parseFloat(item.fundingRate)
   }
-  return { prices, fgMap, fundingMap }
+
+  // Merge TPI transitions: historical hardcoded + live from Redis
+  let tpiTransitions = [...TPI_TRANSITIONS_HISTORICAL]
+  if (signalsData?.transitions) {
+    // btc:transitions from Redis — each entry has { date, state }
+    const liveTransitions = Array.isArray(signalsData.transitions)
+      ? signalsData.transitions
+      : Object.values(signalsData.transitions)
+    // Merge: live entries override/extend historical
+    const merged = { ...Object.fromEntries(tpiTransitions.map(t => [t.date, t])) }
+    for (const t of liveTransitions) {
+      if (t.date && t.state) merged[t.date] = { date: t.date, state: t.state }
+    }
+    tpiTransitions = Object.values(merged).sort((a, b) => a.date.localeCompare(b.date))
+  }
+
+  // Stored daily scores from Redis (front-test data)
+  const storedScores = {}
+  if (signalsData?.history?.btc && Array.isArray(signalsData.history.btc)) {
+    for (const entry of signalsData.history.btc) {
+      if (entry.date && entry.longScore !== undefined) {
+        storedScores[entry.date] = entry
+      }
+    }
+  }
+  // Also check btc:checklist-daily if signals API exposes it
+  if (signalsData?.checklistDaily) {
+    const cd = Array.isArray(signalsData.checklistDaily)
+      ? signalsData.checklistDaily
+      : Object.values(signalsData.checklistDaily)
+    for (const entry of cd) {
+      if (entry.date) storedScores[entry.date] = entry
+    }
+  }
+
+  return { prices, fgMap, fundingMap, tpiTransitions, storedScores }
 }
 
 const COLORS = { grid:'#1a1a1a', zero:'#333', price:'#f7931a', long:'#22c55e', short:'#ef4444', dim:'#2a2a2a', text:'#555', tpiL:'#22c55e22', tpiS:'#ef444422' }
@@ -165,20 +202,27 @@ export default function ChecklistBacktest() {
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
   const [hovered,  setHovered]  = useState(null)
-  const [tpiInput, setTpiInput] = useState('')  // raw JSON input from user
-  const [tpiParsed,setTpiParsed]= useState(TPI_TRANSITIONS)
+  const [tpiInput, setTpiInput] = useState('')
+  const [tpiParsed,setTpiParsed]= useState(null)  // null = use auto-merged
   const [tpiError, setTpiError] = useState(null)
+  const [liveCount, setLiveCount] = useState(0)   // number of Redis-stored score days
 
   const hoveredDay = hovered !== null ? days[hovered] : null
 
-  const runBacktest = async (transitions) => {
+  const runBacktest = async (overrideTransitions) => {
     setLoading(true); setError(null)
     try {
-      const { prices, fgMap, fundingMap } = await fetchAllData()
+      const { prices, fgMap, fundingMap, tpiTransitions, storedScores } = await fetchAllData()
+      const transitions = overrideTransitions ?? tpiTransitions
+
+      // Count how many days have Redis-stored scores
+      const storedCount = prices.filter(p => storedScores[p.date]).length
+      setLiveCount(storedCount)
+
       const res = await fetch('/api/checklist-backtest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prices, fgMap, fundingMap, tpiTransitions: transitions }),
+        body: JSON.stringify({ prices, fgMap, fundingMap, tpiTransitions: transitions, storedScores }),
       })
       const d = await res.json()
       if (!d.ok) throw new Error(d.error)
@@ -187,7 +231,7 @@ export default function ChecklistBacktest() {
     finally    { setLoading(false) }
   }
 
-  useEffect(() => { runBacktest(tpiParsed) }, [])
+  useEffect(() => { runBacktest(null) }, [])
 
   useEffect(() => {
     if (!days.length) return
@@ -202,7 +246,7 @@ export default function ChecklistBacktest() {
     try {
       const parsed = JSON.parse(tpiInput)
       if (!Array.isArray(parsed)) throw new Error('Must be an array')
-      const sorted = parsed.sort((a, b) => a.date.localeCompare(b.date))
+      const sorted = [...TPI_TRANSITIONS_HISTORICAL, ...parsed].sort((a, b) => a.date.localeCompare(b.date))
       setTpiParsed(sorted); setTpiError(null)
       runBacktest(sorted)
     } catch(e) { setTpiError(e.message) }
@@ -228,9 +272,16 @@ export default function ChecklistBacktest() {
     <div className="mt-10">
       <div className="flex items-center justify-between mb-1">
         <SectionHeader label="Checklist Backtest — 100 Days" />
-        <span className="text-[10px] text-[#333] tracking-widest mb-4">
-          {hasTpiInData ? '6/6 SIGNALS' : '5/6 SIGNALS · TPI PENDING'}
-        </span>
+        <div className="flex items-center gap-3 mb-4">
+          {liveCount > 0 && (
+            <span className="text-[10px] text-green-500 tracking-widest">
+              ● {liveCount} LIVE DAYS
+            </span>
+          )}
+          <span className="text-[10px] text-[#333] tracking-widest">
+            {days.some(d => d.tpiAvail) ? '6/6 SIGNALS' : '5/6 SIGNALS · TPI PENDING'}
+          </span>
+        </div>
       </div>
       <div className="text-[10px] text-[#444] tracking-wider mb-4">
         FUNDING · F&G · TPI · OI+PRICE · LIQ IMBALANCE · CVD TAKER · Green = long · Red = short
