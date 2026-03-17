@@ -260,7 +260,7 @@ export default function ChecklistBacktest() {
     setHovered(idx >= 0 && idx < days.length ? idx : null)
   }
 
-  const tpiHasDates = tpiParsed.length > 0
+  const tpiHasDates = tpiParsed !== null && tpiParsed.length > 0
   const hasTpiInData = days.some(d => d.tpiAvail)
   const bias = hoveredDay
     ? hoveredDay.longScore > hoveredDay.shortScore ? { text: `LONG ${hoveredDay.longScore}/6`,  color: '#22c55e' }
