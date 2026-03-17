@@ -29,12 +29,11 @@ async function redisGet(key) {
 }
 
 async function redisSet(key, value) {
-  const encoded = encodeURIComponent(JSON.stringify(value))
-  // Use pipeline endpoint to handle large values safely
-  const res = await fetch(`${REDIS_URL}/pipeline`, {
+  // Upstash REST: POST to /set/key with value as raw JSON string body
+  const res = await fetch(`${REDIS_URL}/set/${encodeURIComponent(key)}`, {
     method: 'POST',
     headers,
-    body: JSON.stringify([['SET', key, JSON.stringify(value)]]),
+    body: JSON.stringify(value),
   })
   return res.json()
 }
