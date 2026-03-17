@@ -35,59 +35,80 @@ export default function Home() {
         {/* ── MAIN ── */}
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
-          {/* ── ROW 1: Daily Brief (left) + BTC TPI (right) ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div style={cardPad}>
-              <DailyBrief />
-            </div>
-            <div style={cardPad}>
-              <TvSignals />
-            </div>
-          </div>
+          {/*
+            ── ROW 1: ABOVE THE FOLD ──
+            3 columns:
+              A (320px): Daily Brief + BTC TPI stacked
+              B (1fr):   Rotation System 1
+              C (1fr):   Rotation System 2
+          */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '320px 1fr 1fr',
+            gap: '16px',
+            marginBottom: '16px',
+            alignItems: 'start',
+          }}>
 
-          {/* ── ROW 2: Rotation System 1 (left) + Rotation System 2 + RS Scores (right) ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            {/* Col A */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={cardPad}>
+                <DailyBrief />
+              </div>
+              <div style={cardPad}>
+                <TvSignals />
+              </div>
+            </div>
+
+            {/* Col B: Rotation System 1 */}
             <div style={card}>
               <RotationChart />
             </div>
+
+            {/* Col C: Rotation System 2 */}
+            <div style={card}>
+              <RotationChart2 />
+            </div>
+
+          </div>
+
+          {/* ── ROW 2: BTC Price chart (wide) + Leverage Verdict + Fear & Greed (stacked, narrow) ── */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 320px',
+            gap: '16px',
+            marginBottom: '16px',
+            alignItems: 'start',
+          }}>
+            <div style={cardPad}>
+              <BtcComparison />
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={card}>
-                <RotationChart2 />
+              <div style={cardPad}>
+                <LeverageVerdictCard />
+              </div>
+              <div style={cardPad}>
+                <FearGreed />
               </div>
             </div>
           </div>
 
-          {/* ── ROW 3: BTC Price vs TPI (left) + Leverage Verdict (right) ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px', marginBottom: '16px' }}>
-            <div style={cardPad}>
-              <BtcComparison />
-            </div>
-            <div style={cardPad}>
-              <LeverageVerdictCard />
-            </div>
-          </div>
-
-          {/* ── ROW 4: Valuation Index full width ── */}
-          <div style={{ marginBottom: '16px', ...cardPad }}>
+          {/* ── ROW 3: Valuation Index full width ── */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}>
             <ValuationIndex />
           </div>
 
-          {/* ── ROW 5: Fear & Greed + Funding Rate side by side ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-            <div style={cardPad}>
-              <FearGreed />
-            </div>
-            <div style={cardPad}>
-              <FundingRate />
-            </div>
+          {/* ── ROW 4: Funding Rate full width ── */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}>
+            <FundingRate />
           </div>
 
-          {/* ── ROW 6: Decision Checklist full width ── */}
+          {/* ── ROW 5: Decision Checklist ── */}
           <div style={{ marginBottom: '16px' }}>
             <DecisionChecklist />
           </div>
 
-          {/* ── ROW 7: Backtest full width ── */}
+          {/* ── ROW 6: Backtest ── */}
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}>
             <ChecklistBacktest />
           </div>
