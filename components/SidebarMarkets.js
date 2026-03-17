@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 
-const COINGECKO_IDS = [
+const CRYPTO = [
   { id: 'bitcoin',     symbol: 'BTC'  },
   { id: 'ethereum',    symbol: 'ETH'  },
   { id: 'solana',      symbol: 'SOL'  },
@@ -13,6 +13,10 @@ const COINGECKO_IDS = [
 const FOREX    = ['AUD/USD', 'AUD/JPY', 'EUR/JPY', 'GBP/JPY', 'USD/JPY']
 const EQUITIES = ['SPY', 'QQQ']
 
+const UP   = '#26a69a'
+const DOWN = '#ef5350'
+const DIM  = '#555'
+
 function fmtPrice(price, sym) {
   if (price == null) return '—'
   if (sym?.includes('JPY')) return '¥' + price.toFixed(2)
@@ -23,61 +27,18 @@ function fmtPrice(price, sym) {
   return '$' + price.toFixed(4)
 }
 
-function pct(v, decimals = 2) {
-  if (v == null || isNaN(v)) return null
-  return (v >= 0 ? '+' : '') + v.toFixed(decimals) + '%'
+function chgColor(v) {
+  if (v == null || Math.abs(v) < 0.001) return DIM
+  return v >= 0 ? UP : DOWN
 }
 
-const UP   = '#26a69a'
-const DOWN = '#ef5350'
-const DIM  = '#444'
-
-function PctBadge({ value, label }) {
-  if (value == null) return null
-  const up    = value >= 0
-  const color = Math.abs(value) < 0.01 ? DIM : up ? UP : DOWN
+function ChgBadge({ value, tiny }) {
+  if (value == null) return <span style={{ fontSize: tiny ? 9 : 11, color: DIM }}>—</span>
+  const color = chgColor(value)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-      {label && <div style={{ fontSize: 8, color: '#3a3a3a', letterSpacing: '0.05em', marginBottom: 1 }}>{label}</div>}
-      <div style={{ fontSize: 11, fontWeight: 700, fontFamily: 'monospace', color }}>
-        {(up ? '+' : '') + value.toFixed(2) + '%'}
-      </div>
-    </div>
-  )
-}
-
-function CryptoRow({ symbol, price, change24h, changeDailyClose }) {
-  return (
-    <div style={{ padding: '7px 0', borderBottom: '1px solid #181818' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>{symbol}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-          {fmtPrice(price)}
-        </span>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
-        <PctBadge value={changeDailyClose} label="vs UTC close" />
-        <PctBadge value={change24h} label="24h" />
-      </div>
-    </div>
-  )
-}
-
-function MarketRow({ symbol, price, change24h, sym }) {
-  const up    = (change24h ?? 0) >= 0
-  const color = change24h == null || Math.abs(change24h) < 0.001 ? DIM : up ? UP : DOWN
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #181818' }}>
-      <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>{symbol}</span>
-      <div style={{ textAlign: 'right' }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
-          {fmtPrice(price, sym)}
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 600, fontFamily: 'monospace', color }}>
-          {change24h != null ? (up ? '+' : '') + change24h.toFixed(2) + '%' : '—'}
-        </div>
-      </div>
-    </div>
+    <span style={{ fontSize: tiny ? 9 : 11, fontWeight: 600, fontFamily: 'monospace', color }}>
+      {value >= 0 ? '+' : ''}{value.toFixed(2)}%
+    </span>
   )
 }
 
@@ -90,41 +51,20 @@ function SectionLabel({ label }) {
   )
 }
 
-// Fetch UTC daily-close price from CoinGecko for each coin
-// CoinGecko free: /coins/{id}/ohlc?vs_currency=usd&days=1 → array of [ts, o, h, l, c]
-async function fetchDailyClosePrices(ids) {
-  const results = {}
-  await Promise.all(ids.map(async ({ id, symbol }) => {
-    try {
-      const r = await fetch(`https://api.coingecko.com/api/v3/coins/${id}/ohlc?vs_currency=usd&days=1`)
-      const data = await r.json()
-      if (!Array.isArray(data) || data.length < 2) return
-      // Last completed candle = second to last (current candle is still forming)
-      const lastClose = data[data.length - 2]?.[4]
-      if (lastClose) results[id] = lastClose
-    } catch {}
-  }))
-  return results
-}
-
 export default function SidebarMarkets() {
-  const [crypto,     setCrypto]     = useState({})
-  const [dailyClose, setDailyClose] = useState({})
-  const [markets,    setMarkets]    = useState({})
-  const [updated,    setUpdated]    = useState(null)
+  const [crypto,  setCrypto]  = useState({})
+  const [markets, setMarkets] = useState({})
+  const [updated, setUpdated] = useState(null)
 
   const fetchData = useCallback(async () => {
     try {
-      const ids = COINGECKO_IDS.map(c => c.id).join(',')
-      const [cgRes, mktRes, closeMap] = await Promise.all([
-        fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`),
+      const [cgRes, mktRes] = await Promise.all([
+        fetch('/api/crypto-prices'),
         fetch('/api/markets'),
-        fetchDailyClosePrices(COINGECKO_IDS),
       ])
       const cgData  = await cgRes.json()
       const mktData = await mktRes.json()
-      setCrypto(cgData)
-      setDailyClose(closeMap)
+      if (cgData.ok)  setCrypto(cgData.data)
       if (mktData.ok) setMarkets(mktData.data)
       setUpdated(new Date())
     } catch {}
@@ -139,38 +79,71 @@ export default function SidebarMarkets() {
   return (
     <div style={{ padding: '8px 4px 40px' }}>
 
+      {/* CRYPTO */}
       <SectionLabel label="CRYPTO" />
-      {COINGECKO_IDS.map(c => {
-        const d        = crypto[c.id]
-        const prevClose = dailyClose[c.id]
-        const price    = d?.usd ?? null
-        const changeDC = (price && prevClose) ? ((price - prevClose) / prevClose) * 100 : null
+      {CRYPTO.map(c => {
+        const d = crypto[c.id] ?? {}
         return (
-          <CryptoRow
-            key={c.id}
-            symbol={c.symbol}
-            price={price}
-            change24h={d?.usd_24h_change ?? null}
-            changeDailyClose={changeDC}
-          />
+          <div key={c.id} style={{ padding: '6px 0', borderBottom: '1px solid #181818' }}>
+            {/* Row 1: symbol + price */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
+                {c.symbol}
+              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+                {fmtPrice(d.price)}
+              </span>
+            </div>
+            {/* Row 2: two deltas */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span style={{ fontSize: 8, color: '#333', letterSpacing: '0.04em' }}>vs close</span>
+                <ChgBadge value={d.changeDailyClose} tiny />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <span style={{ fontSize: 8, color: '#333', letterSpacing: '0.04em' }}>24h</span>
+                <ChgBadge value={d.change24h} tiny />
+              </div>
+            </div>
+          </div>
         )
       })}
 
+      {/* FOREX */}
       <SectionLabel label="FOREX" />
       {FOREX.map(sym => {
-        const d = markets[sym]
+        const d = markets[sym] ?? {}
         return (
-          <MarketRow key={sym} symbol={sym.replace('/', '')} price={d?.price ?? null}
-            change24h={d?.change24h ?? null} sym={sym} />
+          <div key={sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #181818' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
+              {sym.replace('/', '')}
+            </span>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+                {fmtPrice(d.price, sym)}
+              </div>
+              <ChgBadge value={d.change24h} />
+            </div>
+          </div>
         )
       })}
 
+      {/* EQUITIES */}
       <SectionLabel label="EQUITIES" />
       {EQUITIES.map(sym => {
-        const d = markets[sym]
+        const d = markets[sym] ?? {}
         return (
-          <MarketRow key={sym} symbol={sym} price={d?.price ?? null}
-            change24h={d?.change24h ?? null} />
+          <div key={sym} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '7px 0', borderBottom: '1px solid #181818' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#c8c8c8', fontFamily: 'monospace' }}>
+              {sym}
+            </span>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', fontFamily: 'monospace' }}>
+                {fmtPrice(d.price)}
+              </div>
+              <ChgBadge value={d.change24h} />
+            </div>
+          </div>
         )
       })}
 
