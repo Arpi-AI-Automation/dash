@@ -8,7 +8,6 @@ import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
 import ValuationIndex from '../components/ValuationIndex'
 
-// Split imports — gauge and chart now placeable independently
 const TvSignalGauge = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })), { ssr: false })
 const TvSignalChart = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalChart })), { ssr: false })
 const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
@@ -35,10 +34,9 @@ export default function Home() {
       <div style={{ display: 'flex' }}>
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
-          {/*
-            ROW 1 — above the fold
-            Col A (30%): Daily Brief → BTC TPI Gauge
-            Col B (70%): BTC Price chart → Rotation 1 + 2
+          {/* ROW 1 — above the fold
+              Col A (30%): Daily Brief → Fear & Greed
+              Col B (70%): BTC Price chart → Rotation 1 + 2
           */}
           <div style={{
             display: 'grid',
@@ -47,13 +45,10 @@ export default function Home() {
             marginBottom: '16px',
             alignItems: 'start',
           }}>
-            {/* Col A */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}><DailyBrief /></div>
-              <div><TvSignalGauge /></div>
+              <div style={cardPad}><FearGreed /></div>
             </div>
-
-            {/* Col B */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div><TvSignalChart /></div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -63,15 +58,15 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ROW 2 — Valuation Index + Leverage Verdict */}
+          {/* ROW 2 — BTC TPI Gauge + Leverage Verdict */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
-            <div style={cardPad}><ValuationIndex /></div>
+            <div><TvSignalGauge /></div>
             <div style={cardPad}><LeverageVerdictCard /></div>
           </div>
 
-          {/* ROW 3 — Fear & Greed + Funding Rate */}
+          {/* ROW 3 — Valuation Index + Funding Rate */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
-            <div style={cardPad}><FearGreed /></div>
+            <div style={cardPad}><ValuationIndex /></div>
             <div style={cardPad}><FundingRate /></div>
           </div>
 
