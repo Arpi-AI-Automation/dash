@@ -36,46 +36,78 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
           {/*
-            ── ROW 1: ABOVE THE FOLD ──
-            3 columns:
-              A (320px): Daily Brief + BTC TPI stacked
-              B (1fr):   Rotation System 1
-              C (1fr):   Rotation System 2
+            ── ROW 1 ──
+            Daily Brief (left, ~38%) + BTC TPI Strat (right, ~62%)
+            Both are compact height — pair them naturally
           */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '320px 1fr 1fr',
+            gridTemplateColumns: '2fr 3fr',
             gap: '16px',
             marginBottom: '16px',
             alignItems: 'start',
           }}>
-
-            {/* Col A */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={cardPad}>
-                <DailyBrief />
-              </div>
-              <div style={cardPad}>
-                <TvSignals />
-              </div>
+            <div style={cardPad}>
+              <DailyBrief />
             </div>
+            <div style={cardPad}>
+              <TvSignals />
+            </div>
+          </div>
 
-            {/* Col B: Rotation System 1 */}
+          {/*
+            ── ROW 2 ──
+            Rotation System 1 (left) + Rotation System 2 (right, equal halves)
+          */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '16px',
+            marginBottom: '16px',
+            alignItems: 'start',
+          }}>
             <div style={card}>
               <RotationChart />
             </div>
-
-            {/* Col C: Rotation System 2 */}
             <div style={card}>
               <RotationChart2 />
             </div>
-
           </div>
 
-          {/* ── ROW 2: BTC Price chart (wide) + Leverage Verdict + Fear & Greed (stacked, narrow) ── */}
+          {/*
+            ── ROW 3 ──
+            BTC Price vs TPI Strategies — full width, this chart needs space
+          */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}>
+            <ValuationIndex />
+          </div>
+
+          {/*
+            ── ROW 4 ──
+            Leverage Verdict (left) + Fear & Greed (right)
+          */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 320px',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '16px',
+            marginBottom: '16px',
+            alignItems: 'start',
+          }}>
+            <div style={cardPad}>
+              <LeverageVerdictCard />
+            </div>
+            <div style={cardPad}>
+              <FearGreed />
+            </div>
+          </div>
+
+          {/*
+            ── ROW 5 ──
+            BTC Comparison table (wide) + Funding Rate (narrow)
+          */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '3fr 2fr',
             gap: '16px',
             marginBottom: '16px',
             alignItems: 'start',
@@ -83,32 +115,17 @@ export default function Home() {
             <div style={cardPad}>
               <BtcComparison />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={cardPad}>
-                <LeverageVerdictCard />
-              </div>
-              <div style={cardPad}>
-                <FearGreed />
-              </div>
+            <div style={cardPad}>
+              <FundingRate />
             </div>
           </div>
 
-          {/* ── ROW 3: Valuation Index full width ── */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}>
-            <ValuationIndex />
-          </div>
-
-          {/* ── ROW 4: Funding Rate full width ── */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}>
-            <FundingRate />
-          </div>
-
-          {/* ── ROW 5: Decision Checklist ── */}
+          {/* ── ROW 6: Decision Checklist ── */}
           <div style={{ marginBottom: '16px' }}>
             <DecisionChecklist />
           </div>
 
-          {/* ── ROW 6: Backtest ── */}
+          {/* ── ROW 7: Backtest ── */}
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}>
             <ChecklistBacktest />
           </div>
