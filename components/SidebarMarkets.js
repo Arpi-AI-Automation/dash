@@ -135,7 +135,9 @@ export default function SidebarMarkets() {
       <SectionLabel label="FOREX" />
       {FOREX.map(sym => {
         const d = markets[sym] ?? {}
-        const sparkColor = (d.change24h ?? 0) >= 0 ? UP : DOWN
+        const spark = d.spark7d
+        const chg7d = (spark?.length >= 2) ? ((d.price - spark[0]) / spark[0]) * 100 : null
+        const sparkColor = chg7d == null ? DIM : chg7d >= 0 ? UP : DOWN
         return (
           <div key={sym} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -147,8 +149,8 @@ export default function SidebarMarkets() {
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-              <Spark data={d.spark7d} color={sparkColor} />
-              <Chg value={d.change24h} size={11} />
+              <Spark data={spark} color={sparkColor} />
+              <Chg value={chg7d} size={11} />
             </div>
           </div>
         )
@@ -158,7 +160,9 @@ export default function SidebarMarkets() {
       <SectionLabel label="EQUITIES" />
       {EQUITIES.map(sym => {
         const d = markets[sym] ?? {}
-        const sparkColor = (d.change24h ?? 0) >= 0 ? UP : DOWN
+        const spark = d.spark7d
+        const chg7d = (spark?.length >= 2) ? ((d.price - spark[0]) / spark[0]) * 100 : null
+        const sparkColor = chg7d == null ? DIM : chg7d >= 0 ? UP : DOWN
         return (
           <div key={sym} style={{ padding: '8px 0', borderBottom: '1px solid #181818' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
@@ -170,8 +174,8 @@ export default function SidebarMarkets() {
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-              <Spark data={d.spark7d} color={sparkColor} />
-              <Chg value={d.change24h} size={11} />
+              <Spark data={spark} color={sparkColor} />
+              <Chg value={chg7d} size={11} />
             </div>
           </div>
         )

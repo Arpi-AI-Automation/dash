@@ -217,3 +217,34 @@ export default function DecisionChecklist() {
     </div>
   )
 }
+
+// ─── Standalone card for embedding outside the main checklist ─────
+// Fetches server-side only (TPI + F&G + dominance). No Bybit params.
+// Used in page.js left column below TvSignals.
+export function LeverageVerdictCard() {
+  const [data, setData] = useState(null)
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await fetch('/api/checklist')
+        const j = await r.json()
+        if (j.ok) setData(j)
+      } catch {}
+    }
+    load()
+    const iv = setInterval(load, 5 * 60 * 1000)
+    return () => clearInterval(iv)
+  }, [])
+
+  if (!data) return null
+  return (
+    <LeverageVerdict
+      verdict={data.leverageVerdict}
+      tpiSignal={data.tpiSignal}
+      longScore={data.longScore}
+      shortScore={data.shortScore}
+      total={data.total}
+    />
+  )
+}

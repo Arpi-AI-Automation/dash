@@ -1,7 +1,7 @@
 import dynamic from 'next/dynamic'
 
 import SidebarMarkets from '../components/SidebarMarkets'
-import DecisionChecklist from '../components/DecisionChecklist'
+import DecisionChecklist, { LeverageVerdictCard } from '../components/DecisionChecklist'
 import ChecklistBacktest from '../components/ChecklistBacktest'
 import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
@@ -26,9 +26,14 @@ export default function Home() {
 
           {/* SIGNAL ROW */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-            {/* Left: BTC strategy */}
-            <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
-              <TvSignals />
+            {/* Left: BTC strategy + Leverage Verdict */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
+                <TvSignals />
+              </div>
+              <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
+                <LeverageVerdictCard />
+              </div>
             </div>
             {/* Right: Rotation + F&G stacked */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
