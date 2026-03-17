@@ -26,16 +26,16 @@ export default async function Home() {
           {/* SIGNAL ROW */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
             <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
-              <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>BTC STRATEGY · ORPI1</div>
+              <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>BTC STRATEGY · ORPI1</div>
               <TvSignals />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px', flex: 1 }}>
-                <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>ASSET ROTATION</div>
+                <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>ASSET ROTATION</div>
                 <RotationChart />
               </div>
               <div style={{ border: '1px solid #161616', background: '#0a0a0a', padding: '16px', borderRadius: '2px' }}>
-                <div style={{ fontSize: '9px', color: '#333', letterSpacing: '0.25em', marginBottom: '12px' }}>FEAR & GREED</div>
+                <div style={{ fontSize: '10px', color: '#666', letterSpacing: '0.2em', marginBottom: '12px', fontWeight: 700 }}>FEAR & GREED</div>
                 <FearGreed />
               </div>
             </div>
@@ -46,7 +46,7 @@ export default async function Home() {
 
           {/* CONTEXT */}
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px', marginTop: '32px' }}>
-            <div style={{ fontSize: '9px', color: '#222', letterSpacing: '0.3em', marginBottom: '16px' }}>CONTEXT · MARKET CONDITIONS</div>
+            <div style={{ fontSize: '10px', color: '#444', letterSpacing: '0.25em', marginBottom: '16px', fontWeight: 600 }}>CONTEXT · MARKET CONDITIONS</div>
             <div style={{ marginBottom: '24px' }}>
               <FundingRate />
             </div>
@@ -60,7 +60,7 @@ export default async function Home() {
         </div>
 
         {/* SIDEBAR */}
-        <div style={{ width: '200px', flexShrink: 0, borderLeft: '1px solid #111', padding: '24px 16px 80px', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
+        <div style={{ width: '220px', flexShrink: 0, borderLeft: '1px solid #1e1e1e', padding: '0 12px 80px', position: 'sticky', top: 0, height: '100vh', overflowY: 'auto', background: '#0a0a0a' }}>
           <SidebarMarkets />
         </div>
 
