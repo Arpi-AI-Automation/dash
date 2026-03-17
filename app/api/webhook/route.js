@@ -29,8 +29,12 @@ async function redisGet(key) {
 }
 
 async function redisSet(key, value) {
-  const res = await fetch(`${REDIS_URL}/set/${encodeURIComponent(key)}/${encodeURIComponent(JSON.stringify(value))}`, {
-    method: 'GET', headers,
+  const encoded = encodeURIComponent(JSON.stringify(value))
+  // Use pipeline endpoint to handle large values safely
+  const res = await fetch(`${REDIS_URL}/pipeline`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify([['SET', key, JSON.stringify(value)]]),
   })
   return res.json()
 }
