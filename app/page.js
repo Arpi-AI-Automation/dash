@@ -7,6 +7,8 @@ import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
 
+// TvSignals    = BTC TPI Strat gauge + BTC Price vs TPI chart (tall component)
+// ValuationIndex = Short-term / Full-cycle BTC valuation gauge panels
 const TvSignals      = dynamic(() => import('../components/TvSignals'),      { ssr: false })
 const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
 const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { ssr: false })
@@ -34,8 +36,9 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
           {/*
-            ROW 1 — 2 col: Brief+TPI (left, 30%) | BTC Price chart (right, 70%)
-            ValuationIndex needs width to render — give it the majority of the page
+            ROW 1 — 2 col:
+            Col A (30%): Daily Brief → ValuationIndex gauges → nothing else
+            Col B (70%): TvSignals (BTC TPI gauge + BTC Price vs TPI chart — needs full width)
           */}
           <div style={{
             display: 'grid',
@@ -46,15 +49,12 @@ export default function Home() {
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}><DailyBrief /></div>
-              <div style={cardPad}><TvSignals /></div>
+              <div style={cardPad}><ValuationIndex /></div>
             </div>
-            {/* ValuationIndex owns 70% width — chart should render fully above fold */}
-            <div style={card}><ValuationIndex /></div>
+            <div style={card}><TvSignals /></div>
           </div>
 
-          {/*
-            ROW 2 — Rotation 1 (left 40%) | Rotation 2 + RS Scores (right 60%)
-          */}
+          {/* ROW 2 — Rotation System 1 (40%) + Rotation System 2 + RS Scores (60%) */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: '40fr 60fr',
