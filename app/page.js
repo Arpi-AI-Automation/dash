@@ -16,17 +16,8 @@ const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { s
 export const dynamic_ = 'force-dynamic'
 export const revalidate = 0
 
-const card = {
-  border: '1px solid #161616',
-  background: '#0a0a0a',
-  borderRadius: '2px',
-  overflow: 'hidden',
-}
-
-const cardPad = {
-  ...card,
-  padding: '16px',
-}
+const card = { border: '1px solid #161616', background: '#0a0a0a', borderRadius: '2px', overflow: 'hidden' }
+const cardPad = { ...card, padding: '16px' }
 
 export default function Home() {
   return (
@@ -34,20 +25,11 @@ export default function Home() {
       <div style={{ display: 'flex' }}>
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
-          {/* ROW 1 — above the fold
-              Col A (30%): Daily Brief → Fear & Greed
-              Col B (70%): BTC Price chart → Rotation 1 + 2
-          */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '30fr 70fr',
-            gap: '16px',
-            marginBottom: '16px',
-            alignItems: 'start',
-          }}>
+          {/* ROW 1 — Col A (30%): Daily Brief → Leverage Verdict | Col B (70%): Price chart → Rotations */}
+          <div style={{ display: 'grid', gridTemplateColumns: '30fr 70fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={cardPad}><DailyBrief /></div>
-              <div style={cardPad}><FearGreed /></div>
+              <div style={cardPad}><LeverageVerdictCard /></div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div><TvSignalChart /></div>
@@ -58,10 +40,10 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ROW 2 — BTC TPI Gauge + Leverage Verdict */}
+          {/* ROW 2 — BTC TPI Gauge + Fear & Greed */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
             <div><TvSignalGauge /></div>
-            <div style={cardPad}><LeverageVerdictCard /></div>
+            <div style={cardPad}><FearGreed /></div>
           </div>
 
           {/* ROW 3 — Valuation Index + Funding Rate */}
@@ -71,9 +53,7 @@ export default function Home() {
           </div>
 
           {/* ROW 4 — VS BTC table */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}>
-            <BtcComparison />
-          </div>
+          <div style={{ ...cardPad, marginBottom: '16px' }}><BtcComparison /></div>
 
           {/* ROW 5 — Checklist */}
           <div style={{ marginBottom: '16px' }}><DecisionChecklist /></div>
