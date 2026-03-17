@@ -1,4 +1,5 @@
 import dynamic from 'next/dynamic'
+import DailyBrief from '../components/DailyBrief'
 
 import SidebarMarkets from '../components/SidebarMarkets'
 import DecisionChecklist, { LeverageVerdictCard } from '../components/DecisionChecklist'
@@ -25,6 +26,9 @@ export default function Home() {
 
         {/* MAIN */}
         <div style={{ flex: 1, minWidth: 0, padding: '24px 20px 80px' }}>
+
+          {/* DAILY BRIEF */}
+          <DailyBrief />
 
           {/* SIGNAL ROW */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
