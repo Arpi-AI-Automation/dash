@@ -36,56 +36,46 @@ export default function Home() {
         <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
 
           {/*
-            ── ROW 1 ──
-            Daily Brief (left, ~38%) + BTC TPI Strat (right, ~62%)
-            Both are compact height — pair them naturally
+            ── ABOVE THE FOLD ──
+            Col A (35%): Daily Brief + BTC TPI Strat stacked
+            Col B (65%): BTC Price chart (top) + Rotation 1 & 2 side by side (bottom)
           */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: '2fr 3fr',
+            gridTemplateColumns: '35fr 65fr',
             gap: '16px',
             marginBottom: '16px',
             alignItems: 'start',
           }}>
-            <div style={cardPad}>
-              <DailyBrief />
+
+            {/* Col A: Daily Brief + BTC TPI stacked, no gap waste */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={cardPad}>
+                <DailyBrief />
+              </div>
+              <div style={cardPad}>
+                <TvSignals />
+              </div>
             </div>
-            <div style={cardPad}>
-              <TvSignals />
+
+            {/* Col B: Price chart on top, then Rotation 1 + 2 side by side */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={cardPad}>
+                <ValuationIndex />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={card}>
+                  <RotationChart />
+                </div>
+                <div style={card}>
+                  <RotationChart2 />
+                </div>
+              </div>
             </div>
+
           </div>
 
-          {/*
-            ── ROW 2 ──
-            Rotation System 1 (left) + Rotation System 2 (right, equal halves)
-          */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '16px',
-            marginBottom: '16px',
-            alignItems: 'start',
-          }}>
-            <div style={card}>
-              <RotationChart />
-            </div>
-            <div style={card}>
-              <RotationChart2 />
-            </div>
-          </div>
-
-          {/*
-            ── ROW 3 ──
-            BTC Price vs TPI Strategies — full width, this chart needs space
-          */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}>
-            <ValuationIndex />
-          </div>
-
-          {/*
-            ── ROW 4 ──
-            Leverage Verdict (left) + Fear & Greed (right)
-          */}
+          {/* ── ROW 2: Leverage Verdict + Fear & Greed ── */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
@@ -101,10 +91,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/*
-            ── ROW 5 ──
-            BTC Comparison table (wide) + Funding Rate (narrow)
-          */}
+          {/* ── ROW 3: BTC Comparison (wide) + Funding Rate (narrow) ── */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: '3fr 2fr',
@@ -120,12 +107,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ── ROW 6: Decision Checklist ── */}
+          {/* ── ROW 4: Decision Checklist ── */}
           <div style={{ marginBottom: '16px' }}>
             <DecisionChecklist />
           </div>
 
-          {/* ── ROW 7: Backtest ── */}
+          {/* ── ROW 5: Backtest ── */}
           <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}>
             <ChecklistBacktest />
           </div>
