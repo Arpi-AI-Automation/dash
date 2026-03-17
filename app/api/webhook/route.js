@@ -286,6 +286,21 @@ export async function POST(request) {
       return Response.json({ ok: true, script: 'vi', value, date: dateKey })
     }
 
+
+    // ── Valuation Index 2 (Full-cycle) ───────────────────────────────────────
+    // TradingView message: {"script":"vi2","value":{{plot_0}}}
+    if (script === 'vi2') {
+      const value = parseFloat(body.value)
+      if (isNaN(value)) return Response.json({ error: 'Invalid value' }, { status: 400 })
+      const dateKey = new Date(timestamp).toISOString().slice(0, 10)
+      const signal = { value, ts: timestamp, updated_at: new Date().toISOString(), date: dateKey }
+      await Promise.all([
+        redisSet('signal:vi2', signal),
+        redisHSet('vi2:daily', dateKey, signal),
+      ])
+      return Response.json({ ok: true, script: 'vi2', value, date: dateKey })
+    }
+
     return Response.json({ error: 'Unknown script type' }, { status: 400 })
   } catch (err) {
     console.error('Webhook error:', err)
