@@ -224,42 +224,57 @@ export default function RotationChart2() {
           )}
         </div>
 
-        {/* Dominant asset */}
-        <div className="flex items-center gap-2 mb-3">
-          <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace', letterSpacing: '0.1em' }}>DOMINANT ASSET</span>
-          {s2 ? (
-            <span style={{
-              fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
-              padding: '2px 10px', borderRadius: 2,
-              background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
-            }}>
-              {assetLabel}
-            </span>
-          ) : (
-            <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace' }}>
-              awaiting first webhook
-            </span>
-          )}
+        {/* Current signal — shows full allocation if available, else single asset */}
+        <div className="mb-3">
+          <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace', letterSpacing: '0.1em' }}>CURRENT SIGNAL</span>
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            {!s2 ? (
+              <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace' }}>awaiting first webhook</span>
+            ) : alloc ? (
+              // Show all assets with non-zero allocation as pills
+              ASSETS.filter(a => (alloc[a.key] ?? 0) > 0).map(a => (
+                <span key={a.key} style={{
+                  fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
+                  padding: '2px 10px', borderRadius: 2,
+                  background: a.color + '22', color: a.color, border: `1px solid ${a.color}55`
+                }}>
+                  {a.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{alloc[a.key]}%</span>
+                </span>
+              ))
+            ) : (
+              // Fallback: single dominant asset
+              <span style={{
+                fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
+                padding: '2px 10px', borderRadius: 2,
+                background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
+              }}>
+                {assetLabel}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Asset legend */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px' }}>
-          {ASSETS.map(a => (
-            <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{
-                width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
-                boxShadow: a.key === currentAsset ? `0 0 6px ${a.color}` : 'none',
-                opacity: a.key === currentAsset ? 1 : 0.4,
-              }} />
-              <span style={{
-                fontFamily: 'monospace', fontSize: 11,
-                color: a.key === currentAsset ? a.color : '#555',
-                fontWeight: a.key === currentAsset ? 700 : 400,
-              }}>
-                {a.label}
-              </span>
-            </div>
-          ))}
+          {ASSETS.map(a => {
+            const isActive = alloc ? (alloc[a.key] ?? 0) > 0 : a.key === currentAsset
+            return (
+              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
+                  boxShadow: isActive ? `0 0 6px ${a.color}` : 'none',
+                  opacity: isActive ? 1 : 0.4,
+                }} />
+                <span style={{
+                  fontFamily: 'monospace', fontSize: 11,
+                  color: isActive ? a.color : '#555',
+                  fontWeight: isActive ? 700 : 400,
+                }}>
+                  {a.label}
+                </span>
+              </div>
+            )
+          })}
         </div>
       </div>
 
