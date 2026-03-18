@@ -208,44 +208,45 @@ export default function RotationChart2() {
       })
     : ASSETS
 
+  const LBL = { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }
+  const BASE = { fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#fff' }
+
   return (
     <div style={{ borderTop: '1px solid #1a1a1a' }}>
 
       {/* Header */}
-      <div className="px-4 pt-3 pb-3 border-b border-gray-800">
-        <div className="flex items-center justify-between mb-3">
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#e0e0e0', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
+      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #1a1a1a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ ...BASE, fontSize: 14 }}>
             ASSET ROTATION <span style={{ color: '#818cf8' }}>SYSTEM 2</span>
           </span>
           {s2?.updated_at && (
-            <span style={{ fontSize: 10, color: '#555', fontFamily: 'monospace' }}>
+            <span style={{ ...LBL, letterSpacing: 0 }}>
               {new Date(s2.updated_at).toUTCString().slice(0, 16)}
             </span>
           )}
         </div>
 
-        {/* Current signal — shows full allocation if available, else single asset */}
-        <div className="mb-3">
-          <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace', letterSpacing: '0.1em' }}>CURRENT SIGNAL</span>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
+        {/* Current signal */}
+        <div style={{ marginBottom: 10 }}>
+          <span style={{ ...LBL }}>CURRENT SIGNAL</span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6 }}>
             {!s2 ? (
-              <span style={{ fontSize: 12, color: '#555', fontFamily: 'monospace' }}>awaiting first webhook</span>
+              <span style={{ fontFamily: 'monospace', fontSize: 13, color: '#444' }}>awaiting first webhook</span>
             ) : alloc ? (
-              // Show all assets with non-zero allocation as pills
               ASSETS.filter(a => (alloc[a.key] ?? 0) > 0).map(a => (
                 <span key={a.key} style={{
-                  fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
-                  padding: '2px 10px', borderRadius: 2,
+                  fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
+                  padding: '3px 12px', borderRadius: 4,
                   background: a.color + '22', color: a.color, border: `1px solid ${a.color}55`
                 }}>
-                  {a.label} <span style={{ fontSize: 11, opacity: 0.8 }}>{alloc[a.key]}%</span>
+                  {a.label} <span style={{ fontSize: 12, opacity: 0.8 }}>{alloc[a.key]}%</span>
                 </span>
               ))
             ) : (
-              // Fallback: single dominant asset
               <span style={{
-                fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
-                padding: '2px 10px', borderRadius: 2,
+                fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
+                padding: '3px 12px', borderRadius: 4,
                 background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
               }}>
                 {assetLabel}
@@ -255,21 +256,15 @@ export default function RotationChart2() {
         </div>
 
         {/* Asset legend */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
           {ASSETS.map(a => {
             const isActive = alloc ? (alloc[a.key] ?? 0) > 0 : a.key === currentAsset
             return (
-              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
-                  boxShadow: isActive ? `0 0 6px ${a.color}` : 'none',
-                  opacity: isActive ? 1 : 0.4,
-                }} />
-                <span style={{
-                  fontFamily: 'monospace', fontSize: 11,
-                  color: isActive ? a.color : '#555',
-                  fontWeight: isActive ? 700 : 400,
-                }}>
+              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
+                  boxShadow: isActive ? `0 0 6px ${a.color}` : 'none', opacity: isActive ? 1 : 0.4 }} />
+                <span style={{ fontFamily: 'monospace', fontSize: 12,
+                  color: isActive ? a.color : '#555', fontWeight: isActive ? 700 : 400 }}>
                   {a.label}
                 </span>
               </div>
@@ -279,55 +274,50 @@ export default function RotationChart2() {
       </div>
 
       {/* Equity curve */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="text-gray-600 text-xs font-mono mb-1">
-          ROTATION EQUITY · dots = asset changes
-        </div>
+      <div style={{ padding: '12px 16px 8px' }}>
+        <div style={{ ...LBL, marginBottom: 6 }}>ROTATION EQUITY · dots = asset changes</div>
         {history.length > 1 && transitions.length > 0 ? (
           <EquityCanvas history={history} transitions={transitions} />
         ) : (
-          <div className="h-[180px] flex items-center justify-center text-gray-600 text-xs font-mono border border-gray-800 rounded">
+          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '1px solid #1a1a1a', borderRadius: 6, color: '#444', fontFamily: 'monospace', fontSize: 13 }}>
             Equity curve builds after first webhook fires
           </div>
         )}
       </div>
 
-      {/* Score bars — shown when indicator sends scores */}
+      {/* Score bars */}
       {scores && (
-        <div className="px-4 py-3 border-t border-gray-800">
-          <div className="text-gray-600 text-xs font-mono mb-2">RELATIVE STRENGTH SCORES</div>
-          <div className="space-y-1.5">
+        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #1a1a1a' }}>
+          <div style={{ ...LBL, marginBottom: 8 }}>RELATIVE STRENGTH SCORES</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sortedAssets.map(asset => {
               const score = scores[asset.key] ?? 0
               const maxAbs = Math.max(...Object.values(scores).map(Math.abs), 1)
               const isActive = asset.key === currentAsset
-              // Scores can be negative — normalise to bar width
               const barPct = Math.abs(score) / maxAbs * 100
               return (
-                <div key={asset.key} className="flex items-center gap-2">
-                  <span className="w-10 text-xs font-mono font-bold text-right shrink-0"
-                    style={{ color: asset.color }}>{asset.label}</span>
-                  <div className="flex-1 h-2.5 bg-gray-800 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${barPct}%`,
-                        background: score < 0 ? '#ef4444' : asset.color,
-                        opacity: isActive ? 1 : 0.5,
-                        boxShadow: isActive ? `0 0 6px ${asset.color}88` : 'none',
-                      }} />
+                <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
+                    {asset.label}
+                  </span>
+                  <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 9999, transition: 'width 0.5s',
+                      background: score < 0 ? '#ef4444' : asset.color,
+                      opacity: isActive ? 1 : 0.4,
+                      boxShadow: isActive ? `0 0 6px ${asset.color}88` : 'none' }} />
                   </div>
-                  <span className="w-6 text-xs font-mono text-right shrink-0"
-                    style={{ color: isActive ? asset.color : '#4b5563' }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 28, textAlign: 'right', flexShrink: 0,
+                    color: isActive ? asset.color : '#444' }}>
                     {score > 0 ? '+' : ''}{score}
                   </span>
-                  {/* Allocation % if sent */}
                   {alloc && (
-                    <span className="w-9 text-xs font-mono text-right shrink-0"
-                      style={{ color: (alloc[asset.key] ?? 0) > 0 ? asset.color : '#333' }}>
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0,
+                      color: (alloc[asset.key] ?? 0) > 0 ? asset.color : '#333' }}>
                       {alloc[asset.key] ?? 0}%
                     </span>
                   )}
-                  {isActive && <span className="text-xs font-mono shrink-0" style={{ color: asset.color }}>←</span>}
+                  {isActive && <span style={{ fontFamily: 'monospace', fontSize: 13, color: asset.color, flexShrink: 0 }}>←</span>}
                 </div>
               )
             })}
@@ -337,19 +327,20 @@ export default function RotationChart2() {
 
       {/* Allocation only (no scores) */}
       {!scores && alloc && (
-        <div className="px-4 py-3 border-t border-gray-800">
-          <div className="text-gray-600 text-xs font-mono mb-2">ALLOCATION</div>
-          <div className="space-y-1.5">
+        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #1a1a1a' }}>
+          <div style={{ ...LBL, marginBottom: 8 }}>ALLOCATION</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sortedAssets.filter(a => (alloc[a.key] ?? 0) > 0).map(asset => (
-              <div key={asset.key} className="flex items-center gap-2">
-                <span className="w-10 text-xs font-mono font-bold text-right shrink-0"
-                  style={{ color: asset.color }}>{asset.label}</span>
-                <div className="flex-1 h-2.5 bg-gray-800 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full"
-                    style={{ width: `${alloc[asset.key]}%`, background: asset.color }} />
+              <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
+                  {asset.label}
+                </span>
+                <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 9999, overflow: 'hidden' }}>
+                  <div style={{ width: `${alloc[asset.key]}%`, height: '100%', background: asset.color, borderRadius: 9999 }} />
                 </div>
-                <span className="w-9 text-xs font-mono text-right shrink-0"
-                  style={{ color: asset.color }}>{alloc[asset.key]}%</span>
+                <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
+                  {alloc[asset.key]}%
+                </span>
               </div>
             ))}
           </div>
