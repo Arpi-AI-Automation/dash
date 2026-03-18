@@ -47,16 +47,16 @@ function ConditionRow({ label, pass, value, detail }) {
   const iconColor  = isNull ? '#444' : pass ? '#22c55e' : '#ef4444'
   const labelColor = pass ? '#e8e8e8' : isNull ? '#555' : '#666'
   return (
-    <div className={`flex gap-3 py-2.5 border-b border-[#111] last:border-0 ${pass ? '' : 'opacity-70'}`}>
-      <div className="flex-shrink-0 w-5 h-5 flex items-center justify-center mt-0.5">
-        <span className="text-sm font-bold" style={{ color: iconColor }}>{icon}</span>
+    <div style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid #111', opacity: pass ? 1 : 0.7 }}>
+      <div style={{ flexShrink: 0, width: 20, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 2 }}>
+        <span style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: iconColor }}>{icon}</span>
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-semibold tracking-wide" style={{ color: labelColor }}>{label}</span>
-          {value && <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-sm bg-[#111] text-[#555]">{value}</span>}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 600, color: labelColor }}>{label}</span>
+          {value && <span style={{ fontFamily: 'monospace', fontSize: 12, padding: '1px 6px', borderRadius: 3, background: '#111', color: '#555' }}>{value}</span>}
         </div>
-        <div className="text-[10px] text-[#444] mt-0.5 leading-relaxed">{detail}</div>
+        <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#444', marginTop: 2, lineHeight: 1.4 }}>{detail}</div>
       </div>
     </div>
   )
@@ -67,7 +67,7 @@ function ScoreBadge({ score, total, side }) {
   const color = side === 'long'
     ? ratio >= 0.66 ? '#22c55e' : ratio >= 0.33 ? '#eab308' : '#555'
     : ratio >= 0.66 ? '#ef4444' : ratio >= 0.33 ? '#eab308' : '#555'
-  return <span className="text-sm font-mono font-bold" style={{ color }}>{score}/{total} ✓</span>
+  return <span style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color }}>{score}/{total} ✓</span>
 }
 
 function SummaryBox({ score, total, side }) {
@@ -83,8 +83,8 @@ function SummaryBox({ score, total, side }) {
     else                   { msg = `Weak (${score}/${total}) — not the time for a SHORT`;              color = '#555' }
   }
   return (
-    <div className="mt-4 p-3 border rounded-sm text-xs tracking-wide"
-      style={{ borderColor: color + '44', background: color + '0d', color }}>
+    <div style={{ marginTop: 14, padding: '10px 14px', border: `1px solid ${color}44`, borderRadius: 4,
+      background: color + '0d', color, fontFamily: 'monospace', fontSize: 13, letterSpacing: '0.03em' }}>
       {ratio >= 0.5 ? '⚠ ' : '● '}{msg}
     </div>
   )
@@ -92,38 +92,38 @@ function SummaryBox({ score, total, side }) {
 
 function LeverageVerdict({ verdict, tpiSignal, longScore, shortScore, total }) {
   if (!verdict && !tpiSignal) return (
-    <div className="mt-6 p-4 border border-[#1a1a1a] rounded-sm">
-      <div className="text-[10px] text-[#333] tracking-widest mb-1">LEVERAGE VERDICT</div>
-      <div className="text-xs text-[#444]">TPI signal unavailable — connect webhook to enable</div>
+    <div style={{ marginTop: 20, padding: 16, border: '1px solid #1a1a1a', borderRadius: 4 }}>
+      <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#333', letterSpacing: '0.1em', marginBottom: 4 }}>LEVERAGE VERDICT</div>
+      <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#444' }}>TPI signal unavailable — connect webhook to enable</div>
     </div>
   )
   if (!verdict) return null
   const { action, label, color, detail } = verdict
   const icon = { LEVERAGE_OK:'⚡', SPOT_ONLY:'●', REDUCE:'▼', SHORT_OK:'⚡', LIGHT_SHORT:'●', HOLD_SHORT:'◆', CONFLICT:'⚠' }[action] ?? '●'
   return (
-    <div className="mt-6 border rounded-sm overflow-hidden" style={{ borderColor: color + '33' }}>
-      <div className="flex items-center justify-between px-5 py-3 border-b"
-        style={{ borderColor: color + '22', background: color + '0a' }}>
-        <span className="text-[10px] font-bold tracking-widest" style={{ color: color + 'aa' }}>LEVERAGE VERDICT</span>
-        <span className="text-[10px] font-mono px-2 py-0.5 rounded-sm border"
-          style={{ borderColor: color + '44', color: color + 'cc', background: color + '11' }}>
+    <div style={{ marginTop: 20, border: `1px solid ${color}33`, borderRadius: 4, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px',
+        borderBottom: `1px solid ${color}22`, background: color + '0a' }}>
+        <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: color + 'aa' }}>LEVERAGE VERDICT</span>
+        <span style={{ fontFamily: 'monospace', fontSize: 12, padding: '2px 8px', borderRadius: 3,
+          border: `1px solid ${color}44`, color: color + 'cc', background: color + '11' }}>
           TPI: {tpiSignal}
         </span>
       </div>
-      <div className="px-5 py-4">
-        <div className="flex items-center gap-3 mb-2">
-          <span className="text-xl">{icon}</span>
-          <span className="text-sm font-bold tracking-wide" style={{ color }}>{label}</span>
+      <div style={{ padding: '14px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <span style={{ fontSize: 18 }}>{icon}</span>
+          <span style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color }}>{label}</span>
         </div>
-        <div className="text-[11px] text-[#555] leading-relaxed mb-4">{detail}</div>
-        <div className="space-y-2">
+        <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#555', lineHeight: 1.5, marginBottom: 12 }}>{detail}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[['LONG', longScore, '#22c55e'], ['SHORT', shortScore, '#ef4444']].map(([lbl, score, clr]) => (
-            <div key={lbl} className="flex items-center gap-3">
-              <span className="text-[10px] text-[#444] w-10 text-right font-mono">{lbl}</span>
-              <div className="flex-1 h-1.5 bg-[#111] rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${Math.round(score/total*100)}%`, background: clr }} />
+            <div key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#444', width: 40, textAlign: 'right' }}>{lbl}</span>
+              <div style={{ flex: 1, height: 4, background: '#111', borderRadius: 9999, overflow: 'hidden' }}>
+                <div style={{ width: `${Math.round(score/total*100)}%`, height: '100%', background: clr, borderRadius: 9999 }} />
               </div>
-              <span className="text-[10px] font-mono text-[#444] w-8">{score}/{total}</span>
+              <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#444', width: 32 }}>{score}/{total}</span>
             </div>
           ))}
         </div>
@@ -167,35 +167,39 @@ export default function DecisionChecklist() {
 
   const biasColor = data?.bias === 'LONG' ? '#22c55e' : data?.bias === 'SHORT' ? '#ef4444' : '#eab308'
 
+  const LBL = { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }
+
   return (
-    <div className="mt-10">
-      <div className="flex items-center justify-between mb-1">
+    <div style={{ marginTop: 40 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <SectionHeader label="Decision Checklist — Long vs Short" />
-        {data && <span className="text-xs font-mono font-bold mb-4" style={{ color: biasColor }}>{data.bias} {data.longScore}/{data.total}</span>}
+        {data && <span style={{ fontFamily: 'monospace', fontSize: 16, fontWeight: 700, color: biasColor }}>{data.bias} {data.longScore}/{data.total}</span>}
       </div>
-      <div className="text-[10px] text-[#444] tracking-wider mb-5">
-        SCORED FROM LIVE DATA — RECALCULATES EVERY 5 MIN · <span className="text-[#f7931a]">⚠ NOT FINANCIAL ADVICE</span>
+      <div style={{ ...LBL, marginBottom: 20 }}>
+        SCORED FROM LIVE DATA — RECALCULATES EVERY 5 MIN · <span style={{ color: '#f7931a' }}>⚠ NOT FINANCIAL ADVICE</span>
       </div>
 
-      {loading && <div className="text-[#555] text-xs tracking-widest py-4">CALCULATING...</div>}
-      {error   && <div className="text-red-500 text-xs py-2">ERR: {error}</div>}
+      {loading && <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#555', letterSpacing: '0.1em', padding: '16px 0' }}>CALCULATING...</div>}
+      {error   && <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#ef4444', padding: '8px 0' }}>ERR: {error}</div>}
 
       {!loading && !error && data && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {[['long', 'LONG CONDITIONS', 'green', '#1a2a1a', '#0a0d0a', data.longConditions, data.longScore],
-              ['short','SHORT CONDITIONS','red',   '#2a1a1a', '#0d0a0a', data.shortConditions, data.shortScore]
-            ].map(([side, title, clr, border, bg, conds, score]) => (
-              <div key={side} className="rounded-sm overflow-hidden" style={{ border: `1px solid ${border}`, background: bg }}>
-                <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${border}` }}>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full bg-${clr}-500`} />
-                    <span className={`text-xs font-bold tracking-widest text-${clr}-400`}>{title}</span>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            {[
+              ['long',  'LONG CONDITIONS',  '#22c55e', '#0a140a', data.longConditions,  data.longScore],
+              ['short', 'SHORT CONDITIONS', '#ef4444', '#140a0a', data.shortConditions, data.shortScore],
+            ].map(([side, title, color, bg, conds, score]) => (
+              <div key={side} style={{ borderRadius: 6, overflow: 'hidden', border: `1px solid ${color}22`, background: bg }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '12px 16px', borderBottom: `1px solid ${color}22` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' }} />
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color, letterSpacing: '0.08em' }}>{title}</span>
                   </div>
                   <ScoreBadge score={score} total={data.total} side={side} />
                 </div>
-                <div className="px-5 py-2">{conds.map(c => <ConditionRow key={c.id} {...c} />)}</div>
-                <div className="px-5 pb-4"><SummaryBox score={score} total={data.total} side={side} /></div>
+                <div style={{ padding: '4px 16px' }}>{conds.map(c => <ConditionRow key={c.id} {...c} />)}</div>
+                <div style={{ padding: '0 16px 16px' }}><SummaryBox score={score} total={data.total} side={side} /></div>
               </div>
             ))}
           </div>
@@ -210,7 +214,7 @@ export default function DecisionChecklist() {
       )}
 
       {!loading && !error && data && (
-        <div className="mt-2 text-[10px] text-[#2a2a2a] tracking-widest">
+        <div style={{ ...LBL, marginTop: 8, color: '#2a2a2a' }}>
           LAST UPDATE {lastUpdated?.toLocaleTimeString('en-US', { hour12: false })} · REFRESHES EVERY 5 MIN
         </div>
       )}
