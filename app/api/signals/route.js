@@ -1,29 +1,22 @@
 // app/api/signals/route.js
-// Reads current signals, history, and transitions from Upstash Redis
-
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
-
-const headers = { Authorization: `Bearer ${REDIS_TOKEN}` }
+const headers     = { Authorization: `Bearer ${REDIS_TOKEN}` }
 
 async function redisGet(key) {
   try {
-    const res  = await fetch(`${REDIS_URL}/get/${key}`, { headers, next: { revalidate: 0 } })
+    const res  = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, { headers, next: { revalidate: 0 } })
     const data = await res.json()
     if (!data.result) return null
     return JSON.parse(data.result)
   } catch { return null }
 }
 
-// Read a Redis HASH — returns entries sorted ascending by key
 async function redisHGetAll(hashKey) {
   try {
-    const res  = await fetch(`${REDIS_URL}/hgetall/${encodeURIComponent(hashKey)}`, {
-      headers, next: { revalidate: 0 },
-    })
+    const res  = await fetch(`${REDIS_URL}/hgetall/${encodeURIComponent(hashKey)}`, { headers, next: { revalidate: 0 } })
     const data = await res.json()
     if (!data.result || !Array.isArray(data.result)) return []
-
     const entries = []
     for (let i = 0; i < data.result.length; i += 2) {
       const field = data.result[i]
@@ -41,9 +34,7 @@ async function redisHGetAll(hashKey) {
 
 async function redisList(key, count = 500) {
   try {
-    const res  = await fetch(`${REDIS_URL}/lrange/${key}/0/${count - 1}`, {
-      headers, next: { revalidate: 0 },
-    })
+    const res  = await fetch(`${REDIS_URL}/lrange/${key}/0/${count - 1}`, { headers, next: { revalidate: 0 } })
     const data = await res.json()
     if (!data.result) return []
     return data.result.map(item => {
@@ -56,10 +47,14 @@ async function redisList(key, count = 500) {
   } catch { return [] }
 }
 
+const ETF_SYMBOLS = ['smh', 'nlr', 'dtcr', 'igv', 'botz']
+const ETF_TRENDS  = ['t1', 't2']
+
 export async function GET(request) {
   const { searchParams } = new URL(request.url)
-  const includeHistory  = searchParams.get('history') !== 'false'
+  const includeHistory   = searchParams.get('history') !== 'false'
 
+  // Core signals + history
   const [
     btcSignal, rotationSignal, s2Signal,
     dailyHistory, transitions,
@@ -88,6 +83,19 @@ export async function GET(request) {
     includeHistory ? redisHGetAll('vi2:daily')              : Promise.resolve([]),
   ])
 
+  // ETF trend signals — 10 keys: signal:smh-t1 … signal:botz-t2
+  const etfKeys    = ETF_SYMBOLS.flatMap(s => ETF_TRENDS.map(t => `signal:${s}-${t}`))
+  const etfValues  = await Promise.all(etfKeys.map(k => redisGet(k)))
+
+  // Build nested map: { SMH: { t1: signal|null, t2: signal|null }, … }
+  const etf = {}
+  etfKeys.forEach((key, i) => {
+    const [sym, trend] = key.replace('signal:', '').split('-')
+    const SYM = sym.toUpperCase()
+    if (!etf[SYM]) etf[SYM] = { t1: null, t2: null }
+    etf[SYM][trend] = etfValues[i]
+  })
+
   const btcHistory = dailyHistory.length > 0 ? dailyHistory : legacyHistory
 
   return Response.json({
@@ -99,14 +107,15 @@ export async function GET(request) {
       rotation: rotationDaily.length > 0 ? rotationDaily : rotationHistory,
       s2:       s2Daily,
     },
-    transitions,            // BTC state transitions
-    rotationTransitions,    // Asset rotation transitions (ORPI1)
-    s2Transitions,          // Asset rotation transitions (System 2)
-    checklistDaily,         // Daily checklist scores (front-test data)
-    vi: viSignal,           // Current VI value
-    viDaily,               // VI daily history
-    vi2: vi2Signal,         // Current VI-2 value
-    vi2Daily,              // VI-2 daily history
+    transitions,
+    rotationTransitions,
+    s2Transitions,
+    checklistDaily,
+    vi:      viSignal,
+    viDaily,
+    vi2:     vi2Signal,
+    vi2Daily,
+    etf,                  // { SMH: { t1: signal|null, t2: signal|null }, NLR: {...}, ... }
     meta: {
       btc_daily_count:            dailyHistory.length,
       btc_transitions_count:      transitions.length,
