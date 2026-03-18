@@ -1,8 +1,10 @@
 export default function SectionHeader({ label }) {
   return (
-    <div className="flex items-center gap-3 mb-4">
-      <span className="text-[10px] tracking-[0.2em] text-[#555] uppercase">{label}</span>
-      <div className="flex-1 h-px bg-[#1e1e1e]" />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+      <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: '#888', letterSpacing: '0.12em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: '#1a1a1a' }} />
     </div>
   )
 }
