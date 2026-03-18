@@ -2,13 +2,22 @@
 
 import { useEffect, useRef, useState } from 'react'
 
+// ─── Design System ────────────────────────────────────────────────
+const DS = {
+  base:  { fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#ffffff' },
+  label: { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' },
+  dim:   { fontFamily: 'monospace', fontSize: 13, fontWeight: 400, color: '#444' },
+  card:  { background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 8 },
+  inner: { background: '#111', borderRadius: 6 },
+}
+
 // ─── colour helpers ───────────────────────────────────────────────
 const STATE_META = {
-  'MAX LONG':  { bg: 'bg-green-500',  text: 'text-black', ring: '#22c55e', label: 'MAX LONG'  },
-  'LONG':      { bg: 'bg-green-400',  text: 'text-black', ring: '#4ade80', label: 'LONG'      },
-  'NEUTRAL':   { bg: 'bg-gray-400',   text: 'text-black', ring: '#9ca3af', label: 'NEUTRAL'   },
-  'SHORT':     { bg: 'bg-red-400',    text: 'text-white', ring: '#f87171', label: 'SHORT'      },
-  'MAX SHORT': { bg: 'bg-red-600',    text: 'text-white', ring: '#dc2626', label: 'MAX SHORT' },
+  'MAX LONG':  { bg: '#16a34a', text: '#000', label: 'MAX LONG'  },
+  'LONG':      { bg: '#22c55e', text: '#000', label: 'LONG'      },
+  'NEUTRAL':   { bg: '#6b7280', text: '#fff', label: 'NEUTRAL'   },
+  'SHORT':     { bg: '#ef4444', text: '#fff', label: 'SHORT'      },
+  'MAX SHORT': { bg: '#dc2626', text: '#fff', label: 'MAX SHORT' },
 }
 
 const stateColor = (state) =>
@@ -24,18 +33,18 @@ function TpiGauge({ tpi }) {
   const pct = ((val + 1) / 2) * 100
   const col = val > 0.1 ? '#22c55e' : val < -0.1 ? '#ef4444' : '#9ca3af'
   return (
-    <div className="w-full">
-      <div className="flex justify-between text-xs text-gray-500 mb-1">
-        <span>-1</span><span className="text-white font-mono">{fmt2(val)}</span><span>+1</span>
+    <div style={{ width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ ...DS.dim }}>-1</span>
+        <span style={{ ...DS.base, fontSize: 16 }}>{fmt2(val)}</span>
+        <span style={{ ...DS.dim }}>+1</span>
       </div>
-      <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${pct}%`, background: col }}
-        />
+      <div style={{ height: 4, background: '#1f2937', borderRadius: 9999, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: col, borderRadius: 9999, transition: 'width 0.7s' }} />
       </div>
-      <div className="flex justify-between text-xs text-gray-600 mt-0.5">
-        <span>SHORT</span><span>LONG</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+        <span style={{ ...DS.label }}>SHORT</span>
+        <span style={{ ...DS.label }}>LONG</span>
       </div>
     </div>
   )
@@ -286,59 +295,59 @@ export function TvSignalGauge() {
   const stateMeta = STATE_META[btc?.state] || STATE_META['NEUTRAL']
 
   return (
-    <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-5 space-y-5">
-      <div className="text-xs text-gray-500 uppercase tracking-wider">BTC TPI STRAT v.2026</div>
+    <div style={{ ...DS.card, padding: '20px 20px 16px' }}>
+      <div style={{ ...DS.label, marginBottom: 14 }}>BTC TPI STRAT v.2026</div>
 
       {loading && !btc && (
-        <div className="text-gray-600 text-sm font-mono">Waiting for first signal…</div>
+        <div style={{ ...DS.dim }}>Waiting for first signal…</div>
       )}
 
       {btc ? (
         <>
-          <div className="flex items-start justify-between gap-4">
-            <div className={`px-4 py-2 rounded-md font-bold text-base ${stateMeta.bg} ${stateMeta.text}`}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
+            <div style={{
+              padding: '6px 16px', borderRadius: 6, fontFamily: 'monospace',
+              fontSize: 18, fontWeight: 700, background: stateMeta.bg, color: stateMeta.text
+            }}>
               {btc.state}
             </div>
-            <div className="text-right">
+            <div style={{ textAlign: 'right' }}>
               {livePrice ? (
                 <>
-                  <div className="font-mono font-bold text-xl text-gray-100">{fmtPrice(livePrice)}</div>
-                  <div className="flex items-center justify-end gap-2 mt-0.5">
-                    <span className="text-gray-500 text-xs font-mono">{fmtPrice(btc.price)}</span>
-                    <span className="text-xs font-mono font-semibold"
-                      style={{ color: livePrice >= btc.price ? '#22c55e' : '#ef4444' }}>
+                  <div style={{ ...DS.base, fontSize: 22 }}>{fmtPrice(livePrice)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 2 }}>
+                    <span style={{ ...DS.dim }}>{fmtPrice(btc.price)}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700,
+                      color: livePrice >= btc.price ? '#22c55e' : '#ef4444' }}>
                       {livePrice >= btc.price ? '+' : ''}
                       {(((livePrice - btc.price) / btc.price) * 100).toFixed(2)}%
                     </span>
                   </div>
-                  <div className="text-gray-600 text-xs mt-0.5">live / UTC close</div>
+                  <div style={{ ...DS.label, marginTop: 2 }}>live / UTC close</div>
                 </>
               ) : (
-                <div className="font-mono font-bold text-xl text-gray-100">{fmtPrice(btc.price)}</div>
+                <div style={{ ...DS.base, fontSize: 22 }}>{fmtPrice(btc.price)}</div>
               )}
             </div>
           </div>
 
           <TpiGauge tpi={btc.tpi} />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-gray-900 rounded-lg p-3">
-              <div className="text-gray-500 text-xs mb-1">TPI</div>
-              <div className="font-mono font-bold text-lg" style={{ color: stateColor(btc.state) }}>
-                {fmt2(btc.tpi)}
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+            <div style={{ ...DS.inner, padding: '10px 14px' }}>
+              <div style={{ ...DS.label, marginBottom: 4 }}>TPI</div>
+              <div style={{ ...DS.base, fontSize: 20, color: stateColor(btc.state) }}>{fmt2(btc.tpi)}</div>
             </div>
-            <div className="bg-gray-900 rounded-lg p-3">
-              <div className="text-gray-500 text-xs mb-1">RoC</div>
-              <div className="font-mono font-bold text-lg"
-                style={{ color: (btc.roc ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
+            <div style={{ ...DS.inner, padding: '10px 14px' }}>
+              <div style={{ ...DS.label, marginBottom: 4 }}>RoC</div>
+              <div style={{ ...DS.base, fontSize: 20, color: (btc.roc ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
                 {fmt2(btc.roc)}
               </div>
             </div>
           </div>
         </>
       ) : (
-        !loading && <div className="text-gray-600 text-sm">No signal yet</div>
+        !loading && <div style={{ ...DS.dim }}>No signal yet</div>
       )}
     </div>
   )
@@ -354,40 +363,42 @@ export function TvSignalChart() {
     : TV_TRANSITIONS_FALLBACK
 
   if (loading && !btcHistory.length) return (
-    <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-6 text-center text-gray-600 text-sm">
-      Loading chart…
+    <div style={{ ...DS.card, padding: 24, textAlign: 'center' }}>
+      <span style={{ ...DS.dim }}>Loading chart…</span>
     </div>
   )
 
   if (btcHistory.length <= 1) return (
-    <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-6 text-center text-gray-600 text-sm">
-      Chart populates after first TradingView alert
+    <div style={{ ...DS.card, padding: 24, textAlign: 'center' }}>
+      <span style={{ ...DS.dim }}>Chart populates after first TradingView alert</span>
     </div>
   )
 
   return (
-    <div className="bg-[#0f172a] border border-gray-800 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div className="text-xs text-gray-500 uppercase tracking-wider">BTC Price vs. TPI Strategies</div>
-        <div className="flex gap-3 text-xs text-gray-600">
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-green-400 rounded" /> Long</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-red-400 rounded" /> Short</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-indigo-400 rounded" /> L/S equity</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-1 bg-amber-400 rounded" /> Hold/Sell</span>
+    <div style={{ ...DS.card, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ ...DS.label }}>BTC PRICE VS. TPI STRATEGIES</div>
+        <div style={{ display: 'flex', gap: 16 }}>
+          {[['#22c55e','Long'],['#ef4444','Short'],['#818cf8','L/S equity'],['#f59e0b','Hold/Sell']].map(([col, lbl]) => (
+            <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ display: 'inline-block', width: 12, height: 2, background: col, borderRadius: 2 }} />
+              <span style={{ ...DS.label, textTransform: 'none', letterSpacing: 0 }}>{lbl}</span>
+            </span>
+          ))}
         </div>
       </div>
       <CombinedChart history={btcHistory} transitions={TV_TRANSITIONS} />
-      <div className="text-xs text-gray-700 mt-2">
+      <div style={{ ...DS.label, marginTop: 8, textTransform: 'none', letterSpacing: 0, color: '#333' }}>
         Purple = Long/Short (captures both directions) · Amber = Hold/Sell (BTC when LONG, USD when SHORT) · dots = signal changes · no repaint (uses prev close signal)
       </div>
     </div>
   )
 }
 
-// ─── Default export: original combined (backward compat) ─────────
+// ─── Default export ───────────────────────────────────────────────
 export default function TvSignals() {
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <TvSignalGauge />
       <TvSignalChart />
     </div>
@@ -399,11 +410,11 @@ export function TvSignalBanner({ btc }) {
   if (!btc) return null
   const stateMeta = STATE_META[btc.state] || STATE_META['NEUTRAL']
   return (
-    <div className="inline-flex items-center gap-3 font-mono text-xs" style={{ color: stateColor(btc.state) }}>
-      <span className="text-gray-500">BTC</span>
-      <span className={`px-1.5 py-0.5 rounded font-bold ${stateMeta.bg} ${stateMeta.text}`}>{btc.state}</span>
-      <span>TPI {fmt2(btc.tpi)}</span>
-      <span>RoC {fmt2(btc.roc)}</span>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'monospace', color: stateColor(btc.state) }}>
+      <span style={{ ...DS.label }}>BTC</span>
+      <span style={{ padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 13, background: stateMeta.bg, color: stateMeta.text }}>{btc.state}</span>
+      <span style={{ ...DS.base, fontSize: 14 }}>TPI {fmt2(btc.tpi)}</span>
+      <span style={{ ...DS.base, fontSize: 14 }}>RoC {fmt2(btc.roc)}</span>
     </div>
   )
 }
