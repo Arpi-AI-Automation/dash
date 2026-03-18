@@ -6,6 +6,7 @@ import ChecklistBacktest from '../components/ChecklistBacktest'
 import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
+import AiHedgePortfolio from '../components/AiHedgePortfolio'
 import ValuationIndex from '../components/ValuationIndex'
 
 const TvSignalGauge = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })), { ssr: false })
@@ -55,7 +56,10 @@ export default function Home() {
           {/* ROW 4 — VS BTC table */}
           <div style={{ ...cardPad, marginBottom: '16px' }}><BtcComparison /></div>
 
-          {/* ROW 5 — Checklist */}
+          {/* ROW 5 — AI Hedge Portfolio */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}><AiHedgePortfolio /></div>
+
+          {/* ROW 6 — Checklist */}
           <div style={{ marginBottom: '16px' }}><DecisionChecklist /></div>
 
           {/* ROW 6 — Backtest */}
