@@ -7,6 +7,7 @@ import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
 import FearGreed from '../components/FearGreed'
 import AiHedgePortfolio from '../components/AiHedgePortfolio'
+import OIScatter from '../components/OIScatter'
 import ValuationIndex from '../components/ValuationIndex'
 
 const TvSignalGauge = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })), { ssr: false })
@@ -56,7 +57,10 @@ export default function Home() {
           {/* ROW 4 — VS BTC table */}
           <div style={{ ...cardPad, marginBottom: '16px' }}><BtcComparison /></div>
 
-          {/* ROW 5 — AI Hedge Portfolio */}
+          {/* ROW 5 — OI vs Price Scatter */}
+          <div style={{ ...cardPad, marginBottom: '16px' }}><OIScatter /></div>
+
+          {/* ROW 6 — AI Hedge Portfolio */}
           <div style={{ ...cardPad, marginBottom: '16px' }}><AiHedgePortfolio /></div>
 
           {/* ROW 6 — Checklist */}
