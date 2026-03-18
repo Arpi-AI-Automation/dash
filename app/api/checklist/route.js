@@ -35,66 +35,42 @@ async function getTpiSignal() {
 async function getBtcDominance() {
   // Returns { dominanceNow, dominance3dAgo, trend }
   // trend: 'rising' | 'falling' | 'flat'
+  // Strategy: fetch BTC mcap history + total mcap history, compute real dominance at both ends
   try {
-    // Current dominance from /global
-    const globalRes = await fetch(
-      'https://api.coingecko.com/api/v3/global',
-      { next: { revalidate: 0 } }
-    )
-    const globalData = await globalRes.json()
-    const dominanceNow = globalData.data?.market_cap_percentage?.btc ?? null
-    if (dominanceNow === null) return null
+    const [btcRes, totalRes] = await Promise.all([
+      fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=4&interval=daily', { next: { revalidate: 0 } }),
+      fetch('https://api.coingecko.com/api/v3/global/market_cap_chart?vs_currency=usd&days=4', { next: { revalidate: 0 } }),
+    ])
 
-    // BTC market cap history (4 days to get a clean 3-day delta)
-    const histRes = await fetch(
-      'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=4&interval=daily',
-      { next: { revalidate: 0 } }
-    )
-    const histData = await histRes.json()
-    const btcCaps = histData.market_caps ?? []
+    if (!btcRes.ok || !totalRes.ok) return null
 
-    // Total market cap from /global for dominance 3d ago approximation
-    // We use BTC mcap trend as the dominance trend proxy:
-    // If BTC mcap is growing faster than total mcap, dominance rises.
-    // Simpler: compare BTC mcap 3 days ago vs now and directionally compare to dominance now.
-    // Most reliable: use dominance now vs dominance implied 3d ago from BTC mcap delta
-    // vs total mcap (which we get from globalData)
-    const totalMcapNow = globalData.data?.total_market_cap?.usd ?? null
+    const btcData   = await btcRes.json()
+    const totalData = await totalRes.json()
 
-    if (btcCaps.length < 4 || totalMcapNow === null) {
-      return { dominanceNow, trend: null }
-    }
+    const btcCaps   = btcData.market_caps   ?? []  // [[ts, value], ...]
+    const totalCaps = totalData.market_cap_chart?.market_cap ?? []
 
-    // btcCaps[0] = oldest (4 days ago), last = most recent
-    const btcMcap3dAgo = btcCaps[0][1]
-    const btcMcapNow   = btcCaps[btcCaps.length - 1][1]
+    if (btcCaps.length < 2 || totalCaps.length < 2) return null
 
-    // Approximate total mcap 3d ago: use BTC mcap change vs current dominance
-    // to back-calculate. Simpler: just use BTC mcap growth rate vs dominance change.
-    // If BTC mcap grew more than ~1% faster than implied by dominance, it's rising.
-    const btcMcapChangePct = ((btcMcapNow - btcMcap3dAgo) / btcMcap3dAgo) * 100
+    // Oldest point (~3-4 days ago)
+    const btcOld   = btcCaps[0][1]
+    const totalOld = totalCaps[0][1]
+    // Newest point
+    const btcNew   = btcCaps[btcCaps.length - 1][1]
+    const totalNew = totalCaps[totalCaps.length - 1][1]
 
-    // Total mcap 3d ago approximation: totalMcapNow / (1 + implied_total_growth)
-    // We know BTC dominance now and BTC mcap growth — derive total growth
-    // dominanceNow = btcMcapNow / totalMcapNow * 100
-    // dominance3dAgo = btcMcap3dAgo / totalMcap3dAgo * 100
-    // We can't get totalMcap3dAgo directly without the paid endpoint
-    // Best free approximation: compare BTC mcap growth to the market_cap_change_percentage_24h
-    // from globalData for a rough directional check
-    const mcapChange24h = globalData.data?.market_cap_change_percentage_24h_usd ?? 0
+    if (!btcOld || !totalOld || !btcNew || !totalNew) return null
 
-    // If BTC 3d mcap growth > (total mcap 24h change * 3) => dominance rising
-    // Directional proxy only — good enough for a binary long/short signal
-    const impliedTotalGrowth3d = mcapChange24h * 3
-    const dominanceRising = btcMcapChangePct > impliedTotalGrowth3d
-    const trend = Math.abs(btcMcapChangePct - impliedTotalGrowth3d) < 0.5
-      ? 'flat'
-      : dominanceRising ? 'rising' : 'falling'
+    const dominanceNow  = (btcNew / totalNew) * 100
+    const dominance3dAgo = (btcOld / totalOld) * 100
+    const delta = dominanceNow - dominance3dAgo
+
+    const trend = Math.abs(delta) < 0.3 ? 'flat' : delta > 0 ? 'rising' : 'falling'
 
     return {
-      dominanceNow: parseFloat(dominanceNow.toFixed(2)),
-      btcMcapChangePct: parseFloat(btcMcapChangePct.toFixed(2)),
-      impliedTotalGrowth3d: parseFloat(impliedTotalGrowth3d.toFixed(2)),
+      dominanceNow:   parseFloat(dominanceNow.toFixed(2)),
+      dominance3dAgo: parseFloat(dominance3dAgo.toFixed(2)),
+      delta:          parseFloat(delta.toFixed(2)),
       trend,
     }
   } catch { return null }
@@ -172,7 +148,7 @@ export function buildChecklist({ frOi, fearGreed, tpiSignal, oiPrev, oiCurr, tak
   const domFalling = hasDom ? dominance.trend === 'falling' : null
   const c5Long  = hasDom ? domRising  : null
   const c5Short = hasDom ? domFalling : null
-  const c5Val   = hasDom ? `Dom ${dominance.dominanceNow?.toFixed(1)}%` : '—'
+  const c5Val   = hasDom ? `Dom ${dominance.dominanceNow?.toFixed(1)}% (${dominance.delta >= 0 ? '+' : ''}${dominance.delta?.toFixed(2)}% 3d)` : '—'
   const c5LongDetail  = !hasDom ? 'Dominance data unavailable'
     : domRising  ? `BTC dominance ${dominance.dominanceNow?.toFixed(1)}% rising — capital rotating into BTC, bullish`
     : domFalling ? `BTC dominance ${dominance.dominanceNow?.toFixed(1)}% falling — capital rotating to alts`
