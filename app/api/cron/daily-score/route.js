@@ -26,7 +26,7 @@ async function redisGet(key) {
   } catch { return null }
 }
 
-
+async function redisHSet(hashKey, field, value) {
   const res = await fetch(`${REDIS_URL}/hset/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}/${encodeURIComponent(JSON.stringify(value))}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
