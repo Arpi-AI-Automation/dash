@@ -15,7 +15,18 @@ const redisHeaders = {
   'Content-Type': 'application/json',
 }
 
-async function redisHSet(hashKey, field, value) {
+async function redisGet(key) {
+  try {
+    const res  = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    })
+    const data = await res.json()
+    if (!data.result) return null
+    return JSON.parse(data.result)
+  } catch { return null }
+}
+
+
   const res = await fetch(`${REDIS_URL}/hset/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}/${encodeURIComponent(JSON.stringify(value))}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
@@ -110,12 +121,14 @@ export async function GET(request) {
   try {
     const dateKey = new Date().toISOString().slice(0, 10)
 
-    const [bybit, fearGreed, tpiSignal, dominance, btcPrice] = await Promise.all([
+    const [bybit, fearGreed, tpiSignal, dominance, btcPrice, viSignal, vi2Signal] = await Promise.all([
       getBybitFundingOI(),
       getFearGreed(),
       getTpiSignal(),
       getBtcDominance(),
       getBtcPrice(),
+      redisGet('signal:vi'),
+      redisGet('signal:vi2'),
     ])
 
     const frOi = {
@@ -165,9 +178,30 @@ export async function GET(request) {
       ts:         Date.now(),
     }
 
-    await redisHSet('btc:checklist-daily', dateKey, entry)
+    const writes = [redisHSet('btc:checklist-daily', dateKey, entry)]
 
-    return Response.json({ ok: true, date: dateKey, longScore, shortScore, tpiSignal, entry })
+    // Persist today's VI/VI2 values to their daily hashes so history accumulates
+    if (viSignal?.value != null) {
+      writes.push(redisHSet('vi:daily', dateKey, {
+        value:      viSignal.value,
+        ts:         viSignal.ts,
+        updated_at: viSignal.updated_at,
+        date:       dateKey,
+      }))
+    }
+    if (vi2Signal?.value != null) {
+      writes.push(redisHSet('vi2:daily', dateKey, {
+        value:      vi2Signal.value,
+        ts:         vi2Signal.ts,
+        updated_at: vi2Signal.updated_at,
+        date:       dateKey,
+      }))
+    }
+
+    await Promise.all(writes)
+
+    return Response.json({ ok: true, date: dateKey, longScore, shortScore, tpiSignal,
+      vi: viSignal?.value ?? null, vi2: vi2Signal?.value ?? null, entry })
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 })
   }
