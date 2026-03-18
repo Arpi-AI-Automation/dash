@@ -33,47 +33,62 @@ async function getTpiSignal() {
 }
 
 async function getBtcDominance() {
-  // Returns { dominanceNow, dominance3dAgo, trend }
-  // trend: 'rising' | 'falling' | 'flat'
-  // Strategy: fetch BTC mcap history + total mcap history, compute real dominance at both ends
+  // Strategy 1: CoinGecko /global (dominance now) + market_chart (btc mcap history)
   try {
-    const [btcRes, totalRes] = await Promise.all([
+    const [globalRes, btcRes] = await Promise.all([
+      fetch('https://api.coingecko.com/api/v3/global', { next: { revalidate: 0 } }),
       fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=4&interval=daily', { next: { revalidate: 0 } }),
-      fetch('https://api.coingecko.com/api/v3/global/market_cap_chart?vs_currency=usd&days=4', { next: { revalidate: 0 } }),
     ])
 
-    if (!btcRes.ok || !totalRes.ok) return null
+    if (globalRes.ok && btcRes.ok) {
+      const globalData = await globalRes.json()
+      const btcData    = await btcRes.json()
 
-    const btcData   = await btcRes.json()
-    const totalData = await totalRes.json()
+      const dominanceNow = globalData.data?.market_cap_percentage?.btc ?? null
+      const totalMcapNow = globalData.data?.total_market_cap?.usd ?? null
+      const btcCaps      = btcData.market_caps ?? []
 
-    const btcCaps   = btcData.market_caps   ?? []  // [[ts, value], ...]
-    const totalCaps = totalData.market_cap_chart?.market_cap ?? []
+      if (dominanceNow !== null && totalMcapNow !== null && btcCaps.length >= 2) {
+        const btcMcap3dAgo   = btcCaps[0][1]
+        const btcMcapNow     = btcCaps[btcCaps.length - 1][1]
 
-    if (btcCaps.length < 2 || totalCaps.length < 2) return null
-
-    // Oldest point (~3-4 days ago)
-    const btcOld   = btcCaps[0][1]
-    const totalOld = totalCaps[0][1]
-    // Newest point
-    const btcNew   = btcCaps[btcCaps.length - 1][1]
-    const totalNew = totalCaps[totalCaps.length - 1][1]
-
-    if (!btcOld || !totalOld || !btcNew || !totalNew) return null
-
-    const dominanceNow  = (btcNew / totalNew) * 100
-    const dominance3dAgo = (btcOld / totalOld) * 100
-    const delta = dominanceNow - dominance3dAgo
-
-    const trend = Math.abs(delta) < 0.3 ? 'flat' : delta > 0 ? 'rising' : 'falling'
-
-    return {
-      dominanceNow:   parseFloat(dominanceNow.toFixed(2)),
-      dominance3dAgo: parseFloat(dominance3dAgo.toFixed(2)),
-      delta:          parseFloat(delta.toFixed(2)),
-      trend,
+        if (btcMcap3dAgo && btcMcapNow) {
+          const dominance3dAgo = (btcMcap3dAgo / totalMcapNow) * 100
+          const delta          = dominanceNow - dominance3dAgo
+          const trend          = Math.abs(delta) < 0.3 ? 'flat' : delta > 0 ? 'rising' : 'falling'
+          return {
+            dominanceNow:   parseFloat(dominanceNow.toFixed(2)),
+            dominance3dAgo: parseFloat(dominance3dAgo.toFixed(2)),
+            delta:          parseFloat(delta.toFixed(2)),
+            trend,
+          }
+        }
+      }
+      console.error('[dominance] CoinGecko ok but missing data:', { dominanceNow: globalData.data?.market_cap_percentage?.btc, btcCapsLen: btcCaps.length })
+    } else {
+      console.error('[dominance] CoinGecko fetch failed:', globalRes.status, btcRes.status)
     }
-  } catch { return null }
+  } catch (e) {
+    console.error('[dominance] CoinGecko exception:', e?.message)
+  }
+
+  // Strategy 2: fallback — use CoinGecko /global only for dominance now, trend = null
+  // At least shows the current dominance number even without trend
+  try {
+    const res = await fetch('https://api.coingecko.com/api/v3/global', { next: { revalidate: 0 } })
+    if (res.ok) {
+      const d = await res.json()
+      const dominanceNow = d.data?.market_cap_percentage?.btc ?? null
+      if (dominanceNow !== null) {
+        console.error('[dominance] fallback: dominanceNow only, no trend')
+        return { dominanceNow: parseFloat(dominanceNow.toFixed(2)), dominance3dAgo: null, delta: null, trend: null }
+      }
+    }
+  } catch (e) {
+    console.error('[dominance] fallback exception:', e?.message)
+  }
+
+  return null
 }
 
 export function buildChecklist({ frOi, fearGreed, tpiSignal, oiPrev, oiCurr, takerBuyRatio, dominance }) {
@@ -84,7 +99,7 @@ export function buildChecklist({ frOi, fearGreed, tpiSignal, oiPrev, oiCurr, tak
   // ── Condition availability flags ──────────────────────────────────────────
   const hasOiDelta = oiPrev !== null && oiCurr !== null
   const hasTaker   = takerBuyRatio !== null
-  const hasDom     = dominance !== null && dominance?.trend !== null
+  const hasDom     = dominance !== null && dominance?.dominanceNow !== null
   const hasTpi     = tpiSignal !== null
 
   const oiRising   = hasOiDelta ? oiCurr > oiPrev : null
@@ -148,7 +163,7 @@ export function buildChecklist({ frOi, fearGreed, tpiSignal, oiPrev, oiCurr, tak
   const domFalling = hasDom ? dominance.trend === 'falling' : null
   const c5Long  = hasDom ? domRising  : null
   const c5Short = hasDom ? domFalling : null
-  const c5Val   = hasDom ? `Dom ${dominance.dominanceNow?.toFixed(1)}% (${dominance.delta >= 0 ? '+' : ''}${dominance.delta?.toFixed(2)}% 3d)` : '—'
+  const c5Val   = hasDom ? (dominance.delta !== null ? `Dom ${dominance.dominanceNow?.toFixed(1)}% (${dominance.delta >= 0 ? '+' : ''}${dominance.delta?.toFixed(2)}% 3d)` : `Dom ${dominance.dominanceNow?.toFixed(1)}%`) : '—'
   const c5LongDetail  = !hasDom ? 'Dominance data unavailable'
     : domRising  ? `BTC dominance ${dominance.dominanceNow?.toFixed(1)}% rising — capital rotating into BTC, bullish`
     : domFalling ? `BTC dominance ${dominance.dominanceNow?.toFixed(1)}% falling — capital rotating to alts`
