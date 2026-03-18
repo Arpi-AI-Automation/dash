@@ -301,6 +301,39 @@ export async function POST(request) {
       return Response.json({ ok: true, script: 'vi2', value, date: dateKey })
     }
 
+    // ── ETF Trend Signals (T1 / T2) ─────────────────────────────────────────
+    // TradingView message: {"script":"etf","symbol":"SMH","trend":"t1","state":"LONG"}
+    // Redis keys: signal:smh-t1, signal:smh-t2, signal:nlr-t1, etc.
+    if (script === 'etf') {
+      const symbol = (body.symbol || '').toUpperCase()
+      const trend  = (body.trend  || '').toLowerCase()   // 't1' or 't2'
+      const state  = (body.state  || '').toUpperCase()   // 'LONG' or 'SHORT'
+
+      const VALID_SYMBOLS = ['SMH', 'NLR', 'DTCR', 'IGV', 'BOTZ']
+      const VALID_TRENDS  = ['t1', 't2']
+      const VALID_STATES  = ['LONG', 'SHORT']
+
+      if (!VALID_SYMBOLS.includes(symbol)) return Response.json({ error: `Unknown symbol: ${symbol}` }, { status: 400 })
+      if (!VALID_TRENDS.includes(trend))   return Response.json({ error: `Invalid trend: ${trend}` },   { status: 400 })
+      if (!VALID_STATES.includes(state))   return Response.json({ error: `Invalid state: ${state}` },   { status: 400 })
+
+      const redisKey = `signal:${symbol.toLowerCase()}-${trend}`
+      const dateKey  = new Date(timestamp).toISOString().slice(0, 10)
+
+      const signal = {
+        symbol,
+        trend,
+        state,
+        ts:         timestamp,
+        updated_at: new Date().toISOString(),
+        date:       dateKey,
+      }
+
+      await redisSet(redisKey, signal)
+
+      return Response.json({ ok: true, script: 'etf', symbol, trend, state, key: redisKey, date: dateKey })
+    }
+
     return Response.json({ error: 'Unknown script type' }, { status: 400 })
   } catch (err) {
     console.error('Webhook error:', err)
