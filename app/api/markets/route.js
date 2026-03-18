@@ -3,9 +3,9 @@ export const revalidate = 0
 // Stocks: Yahoo Finance (open, reliable for daily % change)
 // Forex: frankfurter.app (ECB rates)
 
-async function fetchYahoo(symbol) {
+async function fetchYahoo(symbol, range = '8d') {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=8d`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}`
     const res = await fetch(url, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
       next: { revalidate: 0 }
@@ -15,13 +15,17 @@ async function fetchYahoo(symbol) {
     const meta   = json.chart?.result?.[0]?.meta
     const closes = json.chart?.result?.[0]?.indicators?.quote?.[0]?.close
     if (!meta || !closes) return null
-    const price     = meta.regularMarketPrice ?? closes[closes.length - 1]
-    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? closes[closes.length - 2]
+    const valid = closes.filter(Boolean)
+    if (valid.length < 2) return null
+    const price     = meta.regularMarketPrice ?? valid[valid.length - 1]
+    const prevClose = meta.chartPreviousClose ?? meta.previousClose ?? valid[valid.length - 2]
     if (!price || !prevClose) return null
     const change24h  = ((price - prevClose) / prevClose) * 100
-    // 7D sparkline: last 7 valid closes
-    const spark7d = closes.filter(Boolean).slice(-7)
-    return { price, change24h, spark7d, currency: 'USD' }
+    const spark7d    = valid.slice(-7)
+    // 30D change (only meaningful if range >= 35d)
+    const close30d   = valid.length >= 31 ? valid[valid.length - 31] : valid[0]
+    const change30d  = parseFloat((((price - close30d) / close30d) * 100).toFixed(2))
+    return { price, change24h, change30d, spark7d, currency: 'USD' }
   } catch { return null }
 }
 
@@ -59,8 +63,8 @@ async function fetchFrankfurter(from, to) {
 
 export async function GET() {
   const [spy, qqq, audusd, audjpy, eurjpy, gbpjpy, usdjpy] = await Promise.all([
-    fetchYahoo('SPY'),
-    fetchYahoo('QQQ'),
+    fetchYahoo('SPY', '8d'),
+    fetchYahoo('QQQ', '35d'),
     fetchFrankfurter('AUD', 'USD'),
     fetchFrankfurter('AUD', 'JPY'),
     fetchFrankfurter('EUR', 'JPY'),
