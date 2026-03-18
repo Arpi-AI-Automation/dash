@@ -194,15 +194,18 @@ function DualChart({ fg, btcAligned, range }) {
       />
       {tooltip && (
         <div
-          className="pointer-events-none absolute top-2 bg-[#111] border border-[#222] rounded px-3 py-2 text-xs z-10 whitespace-nowrap"
-          style={{ left: Math.min(tooltip.x + 12, 260) }}
+          style={{
+            pointerEvents: 'none', position: 'absolute', top: 8, zIndex: 10, whiteSpace: 'nowrap',
+            left: Math.min(tooltip.x + 12, 260),
+            background: '#111', border: '1px solid #222', borderRadius: 4, padding: '8px 12px',
+          }}
         >
-          <div className="text-[#555] mb-1">{tooltip.date}</div>
-          <div className="font-mono font-bold" style={{ color: tooltip.color }}>
+          <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#555', marginBottom: 4 }}>{tooltip.date}</div>
+          <div style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, color: tooltip.color }}>
             F&G {tooltip.fg} · {tooltip.label}
           </div>
           {tooltip.btc != null && (
-            <div className="text-[#f7931a] font-mono mt-0.5">BTC {fmtPrice(tooltip.btc)}</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#f7931a', marginTop: 4 }}>BTC {fmtPrice(tooltip.btc)}</div>
           )}
         </div>
       )}
@@ -270,58 +273,62 @@ export default function FearGreed() {
     <div className="mt-10">
       <SectionHeader label="Fear & Greed" />
 
-      {loading && <div className="text-[#555] text-xs tracking-widest py-4">LOADING<span className="cursor"/></div>}
-      {error   && <div className="text-red-500 text-xs py-2">ERR: {error}</div>}
+      {loading && <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#555', letterSpacing: '0.1em', padding: '16px 0' }}>LOADING...</div>}
+      {error   && <div style={{ fontFamily: 'monospace', fontSize: 13, color: '#ef4444', padding: '8px 0' }}>ERR: {error}</div>}
 
       {!loading && !error && today && (
-        <div className="border border-[#1e1e1e] bg-[#0d0d0d] p-5 rounded-sm">
+        <div style={{ border: '1px solid #1a1a1a', background: '#0a0a0a', padding: 20, borderRadius: 6 }}>
 
           {/* Stats row */}
-          <div className="flex items-start gap-8 mb-5 flex-wrap">
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 28, marginBottom: 20, flexWrap: 'wrap' }}>
             <div>
-              <div className="text-[10px] text-[#444] tracking-widest mb-1">TODAY</div>
-              <div className="flex items-end gap-3">
-                <span className="text-5xl font-bold font-mono" style={{ color: zone.color }}>{today.value}</span>
-                <span className="text-sm mb-1 tracking-wider" style={{ color: zone.color }}>{zone.label.toUpperCase()}</span>
+              <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#555', letterSpacing: '0.08em', marginBottom: 6 }}>TODAY</div>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 48, fontWeight: 700, lineHeight: 1, color: zone.color }}>{today.value}</span>
+                <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 600, marginBottom: 6, letterSpacing: '0.06em', color: zone.color }}>{zone.label.toUpperCase()}</span>
               </div>
             </div>
-            <div className="w-px self-stretch bg-[#1e1e1e]" />
+            <div style={{ width: 1, alignSelf: 'stretch', background: '#1a1a1a' }} />
             {[{label:'7D AGO',val:val7d},{label:'30D AGO',val:val30d}].map(({label,val}) => {
               if (!val) return null
               const z = getZone(val.value)
               return (
                 <div key={label}>
-                  <div className="text-[10px] text-[#444] tracking-widest mb-1">{label}</div>
-                  <div className="text-2xl font-mono" style={{ color: z.color }}>{val.value}</div>
-                  <div className="text-[10px] tracking-wider mt-0.5" style={{ color: z.color }}>{z.label.toUpperCase()}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#555', letterSpacing: '0.08em', marginBottom: 6 }}>{label}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 28, fontWeight: 700, color: z.color }}>{val.value}</div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: '0.06em', marginTop: 3, color: z.color }}>{z.label.toUpperCase()}</div>
                 </div>
               )
             })}
-            <div className="ml-auto hidden sm:flex flex-col gap-1 justify-center">
+            <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 5, justifyContent: 'center' }}>
               {ZONES.map(z => (
-                <div key={z.label} className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full" style={{ background: z.color }} />
-                  <span className="text-[9px] text-[#444] tracking-wider">{z.label.toUpperCase()}</span>
+                <div key={z.label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: z.color }} />
+                  <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#444', letterSpacing: '0.06em' }}>{z.label.toUpperCase()}</span>
                 </div>
               ))}
-              <div className="flex items-center gap-2 mt-1">
-                <div className="w-4 border-t border-[#f7931a99]" />
-                <span className="text-[9px] tracking-wider" style={{color:'#f7931a99'}}>
-                  BTC PRICE {btcLoading ? '(LOADING…)' : !hasBtc ? '(N/A)' : ''}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>
+                <div style={{ width: 14, borderTop: '1px solid #f7931a66' }} />
+                <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#f7931a66', letterSpacing: '0.06em' }}>
+                  BTC {btcLoading ? '(LOADING…)' : !hasBtc ? '(N/A)' : 'PRICE'}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Range selector */}
-          <div className="flex gap-1 mb-3">
+          <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
             {RANGE_OPTS.map(opt => (
               <button
                 key={opt.label}
                 onClick={() => setRange(opt.days)}
-                className={`px-3 py-1 text-[10px] tracking-widest rounded-sm transition-colors ${
-                  range === opt.days ? 'bg-[#1e1e1e] text-[#ccc]' : 'text-[#444] hover:text-[#888]'
-                }`}
+                style={{
+                  padding: '4px 12px', borderRadius: 4, border: 'none', cursor: 'pointer',
+                  fontFamily: 'monospace', fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+                  background: range === opt.days ? '#1e1e1e' : 'transparent',
+                  color: range === opt.days ? '#ccc' : '#444',
+                  transition: 'color 0.15s',
+                }}
               >
                 {opt.label}
               </button>
@@ -329,11 +336,11 @@ export default function FearGreed() {
           </div>
 
           {/* Chart */}
-          <div className="-mx-5">
+          <div style={{ margin: '0 -20px' }}>
             <DualChart fg={fg} btcAligned={btcAligned} range={range} />
           </div>
 
-          <div className="mt-2 text-[10px] text-[#2a2a2a] tracking-widest">
+          <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#2a2a2a', letterSpacing: '0.08em', marginTop: 8 }}>
             SOURCE: ALTERNATIVE.ME · {fg.length} DAYS · {hasBtc ? `BTC: COINGECKO ${btc.length}D` : 'BTC: UNAVAILABLE'}
           </div>
         </div>
