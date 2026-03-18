@@ -272,51 +272,48 @@ export default function RotationChart() {
     ? [...ASSETS].sort((a, b) => (scores[b.key] ?? 0) - (scores[a.key] ?? 0))
     : ASSETS
 
+  const LBL = { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }
+  const BASE = { fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#fff' }
+
   return (
-    <div style={{ borderTop: "1px solid #1a1a1a" }}>
+    <div style={{ borderTop: '1px solid #1a1a1a' }}>
 
       {/* Header */}
-      <div className="px-4 pt-3 pb-3 border-b border-gray-800">
+      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #1a1a1a' }}>
         {/* Title row */}
-        <div className="flex items-center justify-between mb-3">
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#e0e0e0', letterSpacing: '0.05em', fontFamily: 'monospace' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <span style={{ ...BASE, fontSize: 14 }}>
             ASSET ROTATION <span style={{ color: '#f7931a' }}>SYSTEM 1</span>
           </span>
           {rotation?.updated_at && (
-            <span style={{ fontSize: 10, color: '#555', fontFamily: 'monospace' }}>
+            <span style={{ ...LBL, letterSpacing: 0 }}>
               {new Date(rotation.updated_at).toUTCString().slice(0, 16)}
             </span>
           )}
         </div>
         {/* Dominant asset */}
-        <div className="flex items-center gap-2 mb-3">
-          <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace', letterSpacing: '0.1em' }}>DOMINANT ASSET</span>
-          {rotation ? (
-            <span style={{
-              fontSize: 13, fontWeight: 700, fontFamily: 'monospace',
-              padding: '2px 10px', borderRadius: 2,
-              background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
-            }}>
-              {assetLabel}
-            </span>
-          ) : (
-            <span style={{ fontSize: 12, color: '#888', fontFamily: 'monospace', fontWeight: 600 }}>
-              {assetLabel !== '—' ? assetLabel : 'awaiting data'}
-            </span>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <span style={{ ...LBL }}>DOMINANT ASSET</span>
+          <span style={{
+            fontFamily: 'monospace', fontSize: 16, fontWeight: 700,
+            padding: '3px 12px', borderRadius: 4,
+            background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
+          }}>
+            {assetLabel}
+          </span>
         </div>
         {/* Color legend */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 12px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
           {ASSETS.map(a => (
-            <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{
                 width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
                 boxShadow: a.key === currentAsset ? `0 0 6px ${a.color}` : 'none',
-                opacity: a.key === currentAsset ? 1 : 0.45
+                opacity: a.key === currentAsset ? 1 : 0.4
               }} />
               <span style={{
-                fontFamily: 'monospace', fontSize: 11,
-                color: a.key === currentAsset ? a.color : '#666',
+                fontFamily: 'monospace', fontSize: 12,
+                color: a.key === currentAsset ? a.color : '#555',
                 fontWeight: a.key === currentAsset ? 700 : 400
               }}>
                 {a.label}
@@ -327,14 +324,13 @@ export default function RotationChart() {
       </div>
 
       {/* Equity curve */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="text-gray-600 text-xs font-mono mb-1">
-          ROTATION EQUITY · dots = asset changes
-        </div>
+      <div style={{ padding: '12px 16px 8px' }}>
+        <div style={{ ...LBL, marginBottom: 6 }}>ROTATION EQUITY · dots = asset changes</div>
         {history.length > 1 && transitions.length > 0 ? (
           <EquityCanvas history={history} transitions={transitions} />
         ) : (
-          <div className="h-[180px] flex items-center justify-center text-gray-600 text-xs font-mono border border-gray-800 rounded">
+          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '1px solid #1a1a1a', borderRadius: 6, color: '#444', fontFamily: 'monospace', fontSize: 13 }}>
             Equity curve builds after first webhook fires
           </div>
         )}
@@ -342,45 +338,36 @@ export default function RotationChart() {
 
       {/* Score bars */}
       {scores && (
-        <div className="px-4 py-3 border-t border-gray-800">
-          <div className="text-gray-600 text-xs font-mono mb-2">RELATIVE STRENGTH SCORES (0–6)</div>
-          <div className="space-y-1.5">
+        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #1a1a1a' }}>
+          <div style={{ ...LBL, marginBottom: 8 }}>RELATIVE STRENGTH SCORES (0–6)</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sortedAssets.map(asset => {
               const score = scores[asset.key] ?? 0
               const isActive = asset.key === currentAsset
               return (
-                <div key={asset.key} className="flex items-center gap-2">
-                  <span
-                    className="w-10 text-xs font-mono font-bold text-right shrink-0"
-                    style={{ color: asset.color }}
-                  >
+                <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
                     {asset.label}
                   </span>
-                  <div className="flex-1 h-3 bg-gray-800 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${(score / 6) * 100}%`,
-                        background: asset.color,
-                        opacity: isActive ? 1 : 0.5,
-                        boxShadow: isActive ? `0 0 6px ${asset.color}88` : 'none',
-                      }}
-                    />
+                  <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${(score / 6) * 100}%`, height: '100%', background: asset.color,
+                      opacity: isActive ? 1 : 0.4, borderRadius: 9999,
+                      boxShadow: isActive ? `0 0 6px ${asset.color}88` : 'none',
+                      transition: 'width 0.5s'
+                    }} />
                   </div>
-                  <span className="w-4 text-xs font-mono text-right shrink-0"
-                    style={{ color: isActive ? asset.color : '#4b5563' }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, width: 16, textAlign: 'right', flexShrink: 0,
+                    color: isActive ? asset.color : '#444' }}>
                     {score}
                   </span>
-                  {isActive && (
-                    <span className="text-xs font-mono shrink-0" style={{ color: asset.color }}>←</span>
-                  )}
+                  {isActive && <span style={{ fontFamily: 'monospace', fontSize: 13, color: asset.color, flexShrink: 0 }}>←</span>}
                 </div>
               )
             })}
           </div>
         </div>
       )}
-
 
     </div>
   )
