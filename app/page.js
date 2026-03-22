@@ -1,6 +1,5 @@
 import dynamic from 'next/dynamic'
 import DailyBrief from '../components/DailyBrief'
-import SidebarMarkets from '../components/SidebarMarkets'
 import DecisionChecklist, { LeverageVerdictCard } from '../components/DecisionChecklist'
 import ChecklistBacktest from '../components/ChecklistBacktest'
 import FundingRate from '../components/FundingRate'
@@ -10,72 +9,156 @@ import AiHedgePortfolio from '../components/AiHedgePortfolio'
 import OIScatter from '../components/OIScatter'
 import ValuationIndex from '../components/ValuationIndex'
 
-const TvSignalGauge = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })), { ssr: false })
-const TvSignalChart = dynamic(() => import('../components/TvSignals').then(m => ({ default: m.TvSignalChart })), { ssr: false })
+const TvSignalChart = dynamic(
+  () => import('../components/TvSignals').then(m => ({ default: m.TvSignalChart })),
+  { ssr: false }
+)
+const TvSignalGauge = dynamic(
+  () => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })),
+  { ssr: false }
+)
 const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
 const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { ssr: false })
 
 export const dynamic_ = 'force-dynamic'
 export const revalidate = 0
 
-const card = { border: '1px solid #161616', background: '#0a0a0a', borderRadius: '2px', overflow: 'hidden' }
-const cardPad = { ...card, padding: '16px' }
+// ── Design tokens matching Perfect Travel Dashboard ──────────────────────────
+const card = {
+  background: '#ffffff',
+  border: '1px solid #d1d5db',
+  borderRadius: 12,
+  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)',
+  marginBottom: 0,
+}
+
+const cardPad = { ...card, padding: '1.25rem' }
+
+// Coloured left-border variants (like PT Dashboard card accents)
+const cardBlue   = { ...cardPad, borderLeft: '4px solid #3b82f6' }
+const cardGreen  = { ...cardPad, borderLeft: '4px solid #10b981' }
+const cardYellow = { ...cardPad, borderLeft: '4px solid #f59e0b' }
+const cardPurple = { ...cardPad, borderLeft: '4px solid #8b5cf6' }
+const cardRed    = { ...cardPad, borderLeft: '4px solid #ef4444' }
+const cardOrange = { ...cardPad, borderLeft: '4px solid #f97316' }
+
+const LABEL = {
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+  fontSize: 11, fontWeight: 600, color: '#6b7280',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
+  marginBottom: '1rem', display: 'block',
+}
 
 export default function Home() {
   return (
-    <div style={{ minHeight: '100vh', background: '#080808', color: '#e8e8e8' }}>
-      <div style={{ display: 'flex' }}>
-        <div style={{ flex: 1, minWidth: 0, padding: '20px 20px 80px' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: '#f3f4f6',
+      fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+    }}>
+      {/* ── Sticky header ──────────────────────────────────────────────────── */}
+      <header style={{
+        background: '#ffffff', borderBottom: '1px solid #d1d5db',
+        padding: '.875rem 1.5rem', position: 'sticky', top: 0, zIndex: 100,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <h1 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827', margin: 0 }}>
+          Shredder OS
+        </h1>
+        <span style={{ fontSize: '.78rem', color: '#9ca3af' }}>BTC Strategy Dashboard · UTC</span>
+      </header>
 
-          {/* ROW 1 — Col A (30%): Daily Brief → Leverage Verdict | Col B (70%): Price chart → Rotations */}
-          <div style={{ display: 'grid', gridTemplateColumns: '30fr 70fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={cardPad}><DailyBrief /></div>
-              <div style={cardPad}><LeverageVerdictCard /></div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div><TvSignalChart /></div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={card}><RotationChart /></div>
-                <div style={card}><RotationChart2 /></div>
-              </div>
-            </div>
+      {/* ── Main content ───────────────────────────────────────────────────── */}
+      <main style={{ padding: '1.5rem', maxWidth: 1400, margin: '0 auto' }}>
+
+        {/* ROW 1 — Executive Summary (left 30%) + BTC Chart (right 70%) */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '30fr 70fr',
+          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
+        }}>
+          <div style={cardBlue}>
+            <span style={LABEL}>Executive Summary</span>
+            <DailyBrief />
           </div>
 
-          {/* ROW 2 — BTC TPI Gauge + Fear & Greed */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
-            <div><TvSignalGauge /></div>
-            <div style={cardPad}><FearGreed /></div>
-          </div>
-
-          {/* ROW 3 — Valuation Index + Funding Rate */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px', alignItems: 'start' }}>
-            <div style={cardPad}><ValuationIndex /></div>
-            <div style={cardPad}><FundingRate /></div>
-          </div>
-
-          {/* ROW 4 — VS BTC table */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}><BtcComparison /></div>
-
-          {/* ROW 5 — OI vs Price Scatter */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}><OIScatter /></div>
-
-          {/* ROW 6 — AI Hedge Portfolio */}
-          <div style={{ ...cardPad, marginBottom: '16px' }}><AiHedgePortfolio /></div>
-
-          {/* ROW 6 — Checklist */}
-          <div style={{ marginBottom: '16px' }}><DecisionChecklist /></div>
-
-          {/* ROW 6 — Backtest */}
-          <div style={{ borderTop: '1px solid #0f0f0f', paddingTop: '24px' }}><ChecklistBacktest /></div>
-
+          <TvSignalChart />
         </div>
 
-        {/* SIDEBAR */}
-        <div style={{ width: '220px', flexShrink: 0, borderLeft: '1px solid #1e1e1e', padding: '0 12px 80px', background: '#0a0a0a' }}>
-          <SidebarMarkets />
+        {/* ROW 2 — Rotation S1 + S2 */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr',
+          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
+        }}>
+          <RotationChart />
+          <RotationChart2 />
         </div>
-      </div>
+
+        {/* ROW 3 — AI Hedge Portfolio (full width) */}
+        <div style={{ ...cardYellow, marginBottom: '1.25rem' }}>
+          <span style={LABEL}>AI Hedge Portfolio</span>
+          <AiHedgePortfolio />
+        </div>
+
+        {/* ROW 4 — Valuation oscillators + Funding Rate */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr',
+          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
+        }}>
+          <div style={cardGreen}>
+            <span style={LABEL}>Valuation Index</span>
+            <ValuationIndex />
+          </div>
+          <div style={cardOrange}>
+            <span style={LABEL}>Funding Rate · Perpetuals</span>
+            <FundingRate />
+          </div>
+        </div>
+
+        {/* ROW 5 — Fear & Greed + TPI Gauge */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr',
+          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
+        }}>
+          <div style={cardPad}>
+            <span style={LABEL}>Fear & Greed</span>
+            <FearGreed />
+          </div>
+          <TvSignalGauge />
+        </div>
+
+        {/* ROW 6 — Futures OI vs Price (full width) */}
+        <div style={{ ...cardPurple, marginBottom: '1.25rem' }}>
+          <OIScatter />
+        </div>
+
+        {/* ROW 7 — VS BTC comparison (full width) */}
+        <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
+          <span style={LABEL}>vs BTC — Asset outperformance</span>
+          <BtcComparison />
+        </div>
+
+        {/* ROW 8 — Checklist + Verdict */}
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr',
+          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
+        }}>
+          <div style={cardBlue}>
+            <span style={LABEL}>Decision Checklist</span>
+            <DecisionChecklist />
+          </div>
+          <div style={cardRed}>
+            <span style={LABEL}>Leverage Verdict</span>
+            <LeverageVerdictCard />
+          </div>
+        </div>
+
+        {/* ROW 9 — Backtest */}
+        <div style={{ ...cardPurple, marginBottom: '1.25rem' }}>
+          <span style={LABEL}>Checklist Backtest · 100 Days</span>
+          <ChecklistBacktest />
+        </div>
+
+      </main>
     </div>
   )
 }
