@@ -1,91 +1,48 @@
 'use client'
-
 import { useEffect, useRef, useState } from 'react'
 
-// ─── Design System ────────────────────────────────────────────────
-const DS = {
-  base:  { fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#ffffff' },
-  label: { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' },
-  dim:   { fontFamily: 'monospace', fontSize: 13, fontWeight: 400, color: '#444' },
-  card:  { background: '#0a0a0a', border: '1px solid #1a1a1a', borderRadius: 8 },
-  inner: { background: '#111', borderRadius: 6 },
-}
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const stateColor = s => s?.includes('LONG') ? '#059669' : s?.includes('SHORT') ? '#dc2626' : '#6b7280'
+const stateBg    = s => s?.includes('LONG') ? 'rgba(16,185,129,.1)' : s?.includes('SHORT') ? 'rgba(239,68,68,.1)' : 'rgba(107,114,128,.1)'
+const stateBorder = s => s?.includes('LONG') ? 'rgba(16,185,129,.25)' : s?.includes('SHORT') ? 'rgba(239,68,68,.25)' : 'rgba(107,114,128,.25)'
+const fmt2 = v => v == null ? '—' : `${v > 0 ? '+' : ''}${Number(v).toFixed(2)}`
+const fmtPrice = v => v ? '$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'
 
-// ─── colour helpers ───────────────────────────────────────────────
-const STATE_META = {
-  'MAX LONG':  { bg: '#16a34a', text: '#000', label: 'MAX LONG'  },
-  'LONG':      { bg: '#22c55e', text: '#000', label: 'LONG'      },
-  'NEUTRAL':   { bg: '#6b7280', text: '#fff', label: 'NEUTRAL'   },
-  'SHORT':     { bg: '#ef4444', text: '#fff', label: 'SHORT'      },
-  'MAX SHORT': { bg: '#dc2626', text: '#fff', label: 'MAX SHORT' },
-}
-
-const stateColor = (state) =>
-  state?.includes('LONG') ? '#22c55e' : state?.includes('SHORT') ? '#ef4444' : '#9ca3af'
-
-const rocSign = (v) => (v > 0 ? '+' : '')
-const fmt2 = (v) => (v == null ? '—' : `${rocSign(v)}${Number(v).toFixed(2)}`)
-const fmtPrice = (v) => v ? `$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'
-
-// ─── TPI Gauge ────────────────────────────────────────────────────
-function TpiGauge({ tpi }) {
-  const val = Math.max(-1, Math.min(1, tpi ?? 0))
-  const pct = ((val + 1) / 2) * 100
-  const col = val > 0.1 ? '#22c55e' : val < -0.1 ? '#ef4444' : '#9ca3af'
-  return (
-    <div style={{ width: '100%' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <span style={{ ...DS.dim }}>-1</span>
-        <span style={{ ...DS.base, fontSize: 16 }}>{fmt2(val)}</span>
-        <span style={{ ...DS.dim }}>+1</span>
-      </div>
-      <div style={{ height: 4, background: '#1f2937', borderRadius: 9999, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: col, borderRadius: 9999, transition: 'width 0.7s' }} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-        <span style={{ ...DS.label }}>SHORT</span>
-        <span style={{ ...DS.label }}>LONG</span>
-      </div>
-    </div>
-  )
+const LABEL = {
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+  fontSize: 11, fontWeight: 600, color: '#6b7280',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
 }
 
 const TV_TRANSITIONS_FALLBACK = [
-  ['2025-03-17', 'SHORT',  82611.00],
-  ['2025-04-21', 'LONG',   87500.18],
-  ['2025-06-17', 'SHORT', 104639.20],
-  ['2025-06-29', 'LONG',  108381.92],
-  ['2025-07-01', 'SHORT', 105760.21],
-  ['2025-07-02', 'LONG',  108900.07],
-  ['2025-08-18', 'SHORT', 116302.93],
-  ['2025-09-16', 'LONG',  116818.45],
-  ['2025-09-19', 'SHORT', 115724.93],
-  ['2025-10-01', 'LONG',  118639.48],
-  ['2025-10-10', 'SHORT', 113014.09],
-  ['2026-01-05', 'LONG',   93842.25],
-  ['2026-01-09', 'SHORT',  90541.15],
-  ['2026-01-11', 'LONG',   90894.46],
-  ['2026-01-20', 'SHORT',  88341.87],
+  ['2025-03-17','SHORT',82611.00], ['2025-04-21','LONG',87500.18],
+  ['2025-06-17','SHORT',104639.20], ['2025-06-29','LONG',108381.92],
+  ['2025-07-01','SHORT',105760.21], ['2025-07-02','LONG',108900.07],
+  ['2025-08-18','SHORT',116302.93], ['2025-09-16','LONG',116818.45],
+  ['2025-09-19','SHORT',115724.93], ['2025-10-01','LONG',118639.48],
+  ['2025-10-10','SHORT',113014.09], ['2026-01-05','LONG',93842.25],
+  ['2026-01-09','SHORT',90541.15], ['2026-01-11','LONG',90894.46],
+  ['2026-01-20','SHORT',88341.87],
 ]
 
-// ─── Combined BTC Price + Equity Curve ────────────────────────────
+// ─── Canvas chart (same drawing logic, new wrapper/colours) ──────────────────
 function CombinedChart({ history, transitions }) {
-  const TV_TRANSITIONS = transitions?.length > 0 ? transitions : TV_TRANSITIONS_FALLBACK
   const canvasRef = useRef(null)
+  const TV = transitions?.length > 0
+    ? transitions.sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.state, t.price])
+    : TV_TRANSITIONS_FALLBACK
 
   useEffect(() => {
     if (!canvasRef.current || !history?.length) return
     const canvas = canvasRef.current
     const ctx = canvas.getContext('2d')
     const dpr = window.devicePixelRatio || 1
-    const W = canvas.clientWidth
-    const H = canvas.clientHeight
-    canvas.width = W * dpr
-    canvas.height = H * dpr
+    const W = canvas.clientWidth, H = canvas.clientHeight
+    canvas.width = W * dpr; canvas.height = H * dpr
     ctx.scale(dpr, dpr)
 
     const dayMap = {}
-    ;[...history].forEach(p => {
+    history.forEach(p => {
       if (p.price <= 0) return
       const day = new Date(p.ts).toISOString().slice(0, 10)
       if (!dayMap[day] || p.ts > dayMap[day].ts) dayMap[day] = p
@@ -94,188 +51,169 @@ function CombinedChart({ history, transitions }) {
     if (btcPts.length < 2) return
 
     const dateToIdx = {}
-    btcPts.forEach((p, i) => {
-      const d = new Date(p.ts).toISOString().slice(0, 10)
-      dateToIdx[d] = i
-    })
+    btcPts.forEach((p, i) => { dateToIdx[new Date(p.ts).toISOString().slice(0, 10)] = i })
 
-    const eqLSnorm   = new Array(btcPts.length).fill(null)
-    const eqHODLnorm = new Array(btcPts.length).fill(null)
-    eqLSnorm[0]   = 1.0
-    eqHODLnorm[0] = 1.0
+    const eqLS = new Array(btcPts.length).fill(null)
+    const eqHODL = new Array(btcPts.length).fill(null)
+    eqLS[0] = 1; eqHODL[0] = 1
+    let cumLS = 1, cumHODL = 1
 
-    let cumLS   = 1.0
-    let cumHODL = 1.0
-
-    for (let i = 0; i < TV_TRANSITIONS.length; i++) {
-      const [entryDate, state, tvEntryPrice] = TV_TRANSITIONS[i]
-      const nextTransition = TV_TRANSITIONS[i + 1]
-      const exitDate  = nextTransition?.[0] ?? null
-      const tvExitPrice = nextTransition?.[2] ?? null
-      const startIdx = dateToIdx[entryDate] ?? 0
-      const endIdx   = exitDate ? (dateToIdx[exitDate] ?? btcPts.length - 1) : btcPts.length - 1
-
-      for (let j = startIdx; j <= endIdx; j++) {
-        const currentPrice = btcPts[j].price
-        const ratio = currentPrice / tvEntryPrice
-        if (state === 'LONG') {
-          eqLSnorm[j]   = cumLS   * ratio
-          eqHODLnorm[j] = cumHODL * ratio
-        } else if (state === 'SHORT') {
-          eqLSnorm[j]   = cumLS   / ratio
-          eqHODLnorm[j] = cumHODL
-        } else {
-          eqLSnorm[j]   = cumLS
-          eqHODLnorm[j] = cumHODL
-        }
+    for (let i = 0; i < TV.length; i++) {
+      const [entryDate, state, entryPrice] = TV[i]
+      const exitDate = TV[i + 1]?.[0] ?? null
+      const exitPrice = TV[i + 1]?.[2] ?? null
+      const si = dateToIdx[entryDate] ?? 0
+      const ei = exitDate ? (dateToIdx[exitDate] ?? btcPts.length - 1) : btcPts.length - 1
+      for (let j = si; j <= ei; j++) {
+        const r = btcPts[j].price / entryPrice
+        if (state === 'LONG')  { eqLS[j] = cumLS * r; eqHODL[j] = cumHODL * r }
+        else if (state === 'SHORT') { eqLS[j] = cumLS / r; eqHODL[j] = cumHODL }
+        else { eqLS[j] = cumLS; eqHODL[j] = cumHODL }
       }
-
-      const terminalPrice = tvExitPrice ?? btcPts[endIdx].price
-      const termRatio     = terminalPrice / tvEntryPrice
-      if (state === 'LONG') {
-        cumLS   *= termRatio
-        cumHODL *= termRatio
-      } else if (state === 'SHORT') {
-        cumLS   /= termRatio
-      }
+      const termR = (exitPrice ?? btcPts[ei].price) / entryPrice
+      if (state === 'LONG')  { cumLS *= termR; cumHODL *= termR }
+      else if (state === 'SHORT') { cumLS /= termR }
     }
-
     for (let i = 1; i < btcPts.length; i++) {
-      if (eqLSnorm[i]   === null) eqLSnorm[i]   = eqLSnorm[i-1]
-      if (eqHODLnorm[i] === null) eqHODLnorm[i] = eqHODLnorm[i-1]
+      if (eqLS[i] === null)   eqLS[i]   = eqLS[i-1]
+      if (eqHODL[i] === null) eqHODL[i] = eqHODL[i-1]
     }
 
-    const pad = { t: 8, r: 56, b: 20, l: 60 }
-    const splitY = Math.floor(H * 0.58)
-    const cw     = W - pad.l - pad.r
-    const priceCh  = splitY - pad.t - 4
+    const pad = { t: 10, r: 58, b: 24, l: 52 }
+    const splitY = Math.floor(H * 0.57)
+    const cw = W - pad.l - pad.r
+    const priceCh = splitY - pad.t - 4
     const equityCh = H - splitY - pad.b
 
     ctx.clearRect(0, 0, W, H)
+    // light bg for chart area
+    ctx.fillStyle = '#f9fafb'
+    ctx.fillRect(pad.l, pad.t, cw, priceCh)
+    ctx.fillStyle = '#f9fafb'
+    ctx.fillRect(pad.l, splitY + 4, cw, equityCh)
 
     const prices = btcPts.map(d => d.price)
     const minP = Math.min(...prices), maxP = Math.max(...prices)
     const rangeP = maxP - minP || 1
-
     const pX = i => pad.l + (cw * i) / (btcPts.length - 1)
     const pY = p => pad.t + priceCh - (priceCh * (p - minP)) / rangeP
 
-    ctx.font = '9px monospace'; ctx.textAlign = 'right'
+    // Price grid
+    ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'right'
     for (let i = 0; i <= 3; i++) {
       const v = minP + (rangeP * i) / 3
       const y = pad.t + priceCh - (priceCh * i) / 3
-      ctx.fillStyle = '#4b5563'
+      ctx.fillStyle = '#9ca3af'
       ctx.fillText(`$${Math.round(v / 1000)}k`, pad.l - 4, y + 3)
-      ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 0.5
+      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
     }
 
+    // BTC price line coloured by TPI state
     ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
     for (let i = 1; i < btcPts.length; i++) {
-      ctx.strokeStyle = stateColor(btcPts[i].state)
+      const col = btcPts[i].state?.includes('LONG') ? '#10b981' : btcPts[i].state?.includes('SHORT') ? '#ef4444' : '#9ca3af'
+      ctx.strokeStyle = col
       ctx.beginPath()
       ctx.moveTo(pX(i - 1), pY(btcPts[i - 1].price))
-      ctx.lineTo(pX(i),     pY(btcPts[i].price))
+      ctx.lineTo(pX(i), pY(btcPts[i].price))
       ctx.stroke()
     }
 
-    ctx.strokeStyle = '#374151'; ctx.lineWidth = 1; ctx.setLineDash([3, 3])
+    // Divider
+    ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
     ctx.beginPath(); ctx.moveTo(pad.l, splitY); ctx.lineTo(pad.l + cw, splitY); ctx.stroke()
     ctx.setLineDash([])
 
-    const allEq  = [...eqLSnorm, ...eqHODLnorm]
-    const minE   = Math.min(...allEq), maxE = Math.max(...allEq)
+    const allEq = [...eqLS, ...eqHODL]
+    const minE = Math.min(...allEq), maxE = Math.max(...allEq)
     const rangeE = maxE - minE || 0.01
+    const eX = i => pad.l + (cw * i) / (btcPts.length - 1)
+    const eY = v => splitY + 4 + equityCh - (equityCh * (v - minE)) / rangeE
 
-    const eX = i  => pad.l + (cw * i) / (btcPts.length - 1)
-    const eY = v  => splitY + 4 + equityCh - (equityCh * (v - minE)) / rangeE
-
-    const byY = eY(Math.max(minE, Math.min(maxE, 1.0)))
-    ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.5; ctx.setLineDash([3, 3])
-    ctx.beginPath(); ctx.moveTo(pad.l, byY); ctx.lineTo(pad.l + cw, byY); ctx.stroke()
-    ctx.setLineDash([])
-
-    ctx.font = '9px monospace'; ctx.textAlign = 'left'
+    // Equity grid
+    ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'left'
     for (let i = 0; i <= 3; i++) {
       const v = minE + (rangeE * i) / 3
       const y = splitY + 4 + equityCh - (equityCh * i) / 3
-      ctx.fillStyle = '#4b5563'
+      ctx.fillStyle = '#9ca3af'
       ctx.fillText(`${v.toFixed(2)}x`, pad.l + cw + 4, y + 3)
+      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5
+      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
     }
+
+    // 1x baseline
+    const byY = eY(Math.max(minE, Math.min(maxE, 1.0)))
+    ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 0.5; ctx.setLineDash([3, 3])
+    ctx.beginPath(); ctx.moveTo(pad.l, byY); ctx.lineTo(pad.l + cw, byY); ctx.stroke()
+    ctx.setLineDash([])
 
     const drawCurve = (pts, lineColor, fillColor) => {
       ctx.beginPath()
-      pts.forEach((v, i) => { i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)) })
+      pts.forEach((v, i) => i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)))
       ctx.lineTo(eX(pts.length - 1), splitY + 4 + equityCh)
       ctx.lineTo(pad.l, splitY + 4 + equityCh)
       ctx.closePath()
       ctx.fillStyle = fillColor; ctx.fill()
       ctx.strokeStyle = lineColor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'
       ctx.beginPath()
-      pts.forEach((v, i) => { i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)) })
+      pts.forEach((v, i) => i === 0 ? ctx.moveTo(eX(i), eY(v)) : ctx.lineTo(eX(i), eY(v)))
       ctx.stroke()
     }
 
-    drawCurve(eqHODLnorm, '#f59e0b', 'rgba(245,158,11,0.08)')
-    drawCurve(eqLSnorm,   '#818cf8', 'rgba(129,140,248,0.12)')
+    drawCurve(eqHODL, '#f59e0b', 'rgba(245,158,11,0.08)')
+    drawCurve(eqLS,   '#8b5cf6', 'rgba(139,92,246,0.10)')
 
-    TV_TRANSITIONS.slice(1).forEach(([date]) => {
+    // Transition dots
+    TV.slice(1).forEach(([date]) => {
       const idx = btcPts.findIndex(p => new Date(p.ts).toISOString().slice(0, 10) === date)
       if (idx < 0) return
-      ;[[eqLSnorm, '#818cf8'], [eqHODLnorm, '#f59e0b']].forEach(([pts, col]) => {
+      ;[[eqLS, '#8b5cf6'], [eqHODL, '#f59e0b']].forEach(([pts, col]) => {
         ctx.beginPath(); ctx.arc(eX(idx), eY(pts[idx] ?? 1), 2.5, 0, Math.PI * 2)
         ctx.fillStyle = col; ctx.fill()
       })
     })
 
-    const lastLS   = eqLSnorm[eqLSnorm.length - 1]
-    const lastHODL = eqHODLnorm[eqHODLnorm.length - 1]
-    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left'
-    ctx.fillStyle = '#818cf8'
+    // Labels
+    const lastLS   = eqLS[eqLS.length - 1]
+    const lastHODL = eqHODL[eqHODL.length - 1]
+    ctx.font = 'bold 10px -apple-system,sans-serif'; ctx.textAlign = 'left'
+    ctx.fillStyle = '#8b5cf6'
     ctx.fillText(`${lastLS.toFixed(3)}x`, pad.l + cw + 4, eY(lastLS) + 4)
     ctx.fillStyle = '#f59e0b'
     const lsDiff = Math.abs(eY(lastLS) - eY(lastHODL))
-    const hodlOffset = lsDiff < 12 ? 12 : 0
-    ctx.fillText(`${lastHODL.toFixed(3)}x`, pad.l + cw + 4, eY(lastHODL) + 4 + hodlOffset)
+    ctx.fillText(`${lastHODL.toFixed(3)}x`, pad.l + cw + 4, eY(lastHODL) + 4 + (lsDiff < 12 ? 12 : 0))
 
-    ctx.fillStyle = '#6b7280'; ctx.font = '9px monospace'; ctx.textAlign = 'center'
+    ctx.fillStyle = '#9ca3af'; ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'center'
     ;[0, Math.floor((btcPts.length - 1) / 2), btcPts.length - 1].forEach(i => {
       const d = new Date(btcPts[i].ts)
       ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`, pX(i), H - 4)
     })
+  }, [history, transitions])
 
-  }, [history])
-
-  return (
-    <canvas ref={canvasRef} className="w-full" style={{ height: 320, display: 'block' }} />
-  )
+  return <canvas ref={canvasRef} style={{ width: '100%', height: 280, display: 'block', borderRadius: 6 }} />
 }
 
-// ─── Shared data hook ─────────────────────────────────────────────
+// ─── Shared data hook ─────────────────────────────────────────────────────────
 function useSignalData() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [livePrice, setLivePrice] = useState(null)
 
   useEffect(() => {
-    const fetchSignals = async () => {
-      try {
-        const res = await fetch('/api/signals?history=true')
-        if (!res.ok) throw new Error('Failed to fetch signals')
-        setData(await res.json())
-      } catch {}
+    const fetch_ = async () => {
+      try { setData(await (await fetch('/api/signals?history=true')).json()) } catch {}
       setLoading(false)
     }
-    fetchSignals()
-    const iv = setInterval(fetchSignals, 60_000)
+    fetch_()
+    const iv = setInterval(fetch_, 60_000)
     return () => clearInterval(iv)
   }, [])
 
   useEffect(() => {
     const fetchLive = async () => {
       try {
-        const r = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot')
-        const j = await r.json()
+        const j = await (await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot')).json()
         const p = parseFloat(j?.data?.amount)
         if (p > 0) setLivePrice(p)
       } catch {}
@@ -288,133 +226,126 @@ function useSignalData() {
   return { data, loading, livePrice }
 }
 
-// ─── EXPORT 1: BTC TPI Gauge card only ───────────────────────────
+// ─── TPI Gauge (for gauge-only usage elsewhere) ───────────────────────────────
 export function TvSignalGauge() {
   const { data, loading, livePrice } = useSignalData()
   const btc = data?.btc
-  const stateMeta = STATE_META[btc?.state] || STATE_META['NEUTRAL']
+  const col = stateColor(btc?.state)
+  const bg  = stateBg(btc?.state)
+  const bdr = stateBorder(btc?.state)
+  const pct = btc?.tpi != null ? ((Math.max(-1, Math.min(1, btc.tpi)) + 1) / 2) * 100 : 50
 
   return (
-    <div style={{ ...DS.card, padding: '20px 20px 16px' }}>
-      <div style={{ ...DS.label, marginBottom: 14 }}>BTC TPI STRAT v.2026</div>
-
-      {loading && !btc && (
-        <div style={{ ...DS.dim }}>Waiting for first signal…</div>
-      )}
-
-      {btc ? (
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '1.25rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)', borderLeft: '4px solid #3b82f6' }}>
+      <div style={{ ...LABEL, marginBottom: 12 }}>BTC TPI Strategy</div>
+      {loading && !btc ? (
+        <div style={{ ...LABEL, color: '#d1d5db' }}>Loading…</div>
+      ) : btc ? (
         <>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 }}>
-            <div style={{
-              padding: '6px 16px', borderRadius: 6, fontFamily: 'monospace',
-              fontSize: 18, fontWeight: 700, background: stateMeta.bg, color: stateMeta.text
-            }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+            <span style={{ padding: '4px 14px', borderRadius: 20, fontSize: 13, fontWeight: 700, background: bg, color: col, border: `1px solid ${bdr}` }}>
               {btc.state}
-            </div>
+            </span>
             <div style={{ textAlign: 'right' }}>
               {livePrice ? (
                 <>
-                  <div style={{ ...DS.base, fontSize: 22 }}>{fmtPrice(livePrice)}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 2 }}>
-                    <span style={{ ...DS.dim }}>{fmtPrice(btc.price)}</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700,
-                      color: livePrice >= btc.price ? '#22c55e' : '#ef4444' }}>
-                      {livePrice >= btc.price ? '+' : ''}
-                      {(((livePrice - btc.price) / btc.price) * 100).toFixed(2)}%
+                  <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{fmtPrice(livePrice)}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end', marginTop: 2 }}>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{fmtPrice(btc.price)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: livePrice >= btc.price ? '#059669' : '#dc2626' }}>
+                      {livePrice >= btc.price ? '+' : ''}{(((livePrice - btc.price) / btc.price) * 100).toFixed(2)}%
                     </span>
                   </div>
-                  <div style={{ ...DS.label, marginTop: 2 }}>live / UTC close</div>
+                  <div style={{ ...LABEL, marginTop: 2 }}>live / UTC close</div>
                 </>
               ) : (
-                <div style={{ ...DS.base, fontSize: 22 }}>{fmtPrice(btc.price)}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: '#111827' }}>{fmtPrice(btc.price)}</div>
               )}
             </div>
           </div>
-
-          <TpiGauge tpi={btc.tpi} />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
-            <div style={{ ...DS.inner, padding: '10px 14px' }}>
-              <div style={{ ...DS.label, marginBottom: 4 }}>TPI</div>
-              <div style={{ ...DS.base, fontSize: 20, color: stateColor(btc.state) }}>{fmt2(btc.tpi)}</div>
-            </div>
-            <div style={{ ...DS.inner, padding: '10px 14px' }}>
-              <div style={{ ...DS.label, marginBottom: 4 }}>RoC</div>
-              <div style={{ ...DS.base, fontSize: 20, color: (btc.roc ?? 0) >= 0 ? '#22c55e' : '#ef4444' }}>
-                {fmt2(btc.roc)}
+          <div style={{ marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ ...LABEL }}>Short</span><span style={{ ...LABEL }}>Long</span>
+          </div>
+          <div style={{ height: 6, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden', marginBottom: 12 }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: col, borderRadius: 9999, transition: 'width .7s' }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            {[['TPI', fmt2(btc.tpi)], ['RoC', fmt2(btc.roc)]].map(([lbl, val]) => (
+              <div key={lbl} style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 12px' }}>
+                <div style={{ ...LABEL, marginBottom: 3 }}>{lbl}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: col }}>{val}</div>
               </div>
-            </div>
+            ))}
           </div>
         </>
       ) : (
-        !loading && <div style={{ ...DS.dim }}>No signal yet</div>
+        <div style={{ ...LABEL, color: '#d1d5db' }}>No signal yet</div>
       )}
     </div>
   )
 }
 
-// ─── EXPORT 2: BTC Price vs TPI chart only ───────────────────────
+// ─── Main chart export ────────────────────────────────────────────────────────
 export function TvSignalChart() {
   const { data, loading } = useSignalData()
-  const btcHistory = data?.history?.btc || []
+  const btcHistory   = data?.history?.btc || []
   const rawTransitions = data?.transitions || []
-  const TV_TRANSITIONS = rawTransitions.length > 0
-    ? rawTransitions.sort((a, b) => a.date.localeCompare(b.date)).map(t => [t.date, t.state, t.price])
-    : TV_TRANSITIONS_FALLBACK
 
   if (loading && !btcHistory.length) return (
-    <div style={{ ...DS.card, padding: 24, textAlign: 'center' }}>
-      <span style={{ ...DS.dim }}>Loading chart…</span>
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '3rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)' }}>
+      <div style={{ ...LABEL, color: '#d1d5db' }}>Loading chart…</div>
     </div>
   )
 
-  if (btcHistory.length <= 1) return (
-    <div style={{ ...DS.card, padding: 24, textAlign: 'center' }}>
-      <span style={{ ...DS.dim }}>Chart populates after first TradingView alert</span>
-    </div>
-  )
+  const LEGEND = [['#10b981','Long'],['#ef4444','Short'],['#8b5cf6','L/S equity'],['#f59e0b','Hold/Sell']]
 
   return (
-    <div style={{ ...DS.card, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ ...DS.label }}>BTC PRICE VS. TPI STRATEGIES</div>
-        <div style={{ display: 'flex', gap: 16 }}>
-          {[['#22c55e','Long'],['#ef4444','Short'],['#818cf8','L/S equity'],['#f59e0b','Hold/Sell']].map(([col, lbl]) => (
-            <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ display: 'inline-block', width: 12, height: 2, background: col, borderRadius: 2 }} />
-              <span style={{ ...DS.label, textTransform: 'none', letterSpacing: 0 }}>{lbl}</span>
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '1.25rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ ...LABEL }}>BTC Price vs. TPI Strategies</div>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+          {LEGEND.map(([col, lbl]) => (
+            <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6b7280' }}>
+              <span style={{ display: 'inline-block', width: 16, height: 2, background: col, borderRadius: 2 }} />
+              {lbl}
             </span>
           ))}
         </div>
       </div>
-      <CombinedChart history={btcHistory} transitions={TV_TRANSITIONS} />
-      <div style={{ ...DS.label, marginTop: 8, textTransform: 'none', letterSpacing: 0, color: '#333' }}>
-        Purple = Long/Short (captures both directions) · Amber = Hold/Sell (BTC when LONG, USD when SHORT) · dots = signal changes · no repaint (uses prev close signal)
+
+      {btcHistory.length > 1 ? (
+        <CombinedChart history={btcHistory} transitions={rawTransitions} />
+      ) : (
+        <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+          <span style={{ ...LABEL, color: '#d1d5db' }}>Chart populates after first TradingView alert</span>
+        </div>
+      )}
+
+      <div style={{ ...LABEL, marginTop: 10, textTransform: 'none', letterSpacing: 0, color: '#9ca3af', fontWeight: 400 }}>
+        Purple = Long/Short (captures both directions) · Amber = Hold/Sell (BTC when LONG, USD when SHORT) · dots = signal changes · no repaint
       </div>
     </div>
   )
 }
 
-// ─── Default export ───────────────────────────────────────────────
 export default function TvSignals() {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <TvSignalGauge />
       <TvSignalChart />
     </div>
   )
 }
 
-// ─── Compact Banner ───────────────────────────────────────────────
 export function TvSignalBanner({ btc }) {
   if (!btc) return null
-  const stateMeta = STATE_META[btc.state] || STATE_META['NEUTRAL']
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontFamily: 'monospace', color: stateColor(btc.state) }}>
-      <span style={{ ...DS.label }}>BTC</span>
-      <span style={{ padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 13, background: stateMeta.bg, color: stateMeta.text }}>{btc.state}</span>
-      <span style={{ ...DS.base, fontSize: 14 }}>TPI {fmt2(btc.tpi)}</span>
-      <span style={{ ...DS.base, fontSize: 14 }}>RoC {fmt2(btc.roc)}</span>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 700, background: stateBg(btc.state), color: stateColor(btc.state), border: `1px solid ${stateBorder(btc.state)}` }}>
+        {btc.state}
+      </span>
+      <span style={{ fontSize: 12, color: '#6b7280' }}>TPI {fmt2(btc.tpi)} · RoC {fmt2(btc.roc)}</span>
     </div>
   )
 }
