@@ -1,19 +1,12 @@
 // app/api/cron/daily-score/route.js
 // Runs at UTC midnight via Vercel cron.
-// Fetches server-side checklist conditions and writes today's score to Redis.
-// Bybit client-side params (FR, OI, taker) are fetched from Bybit REST here
-// since this is a server-side cron — Bybit is accessible from Vercel.
+// Writes: btc:checklist-daily, vi:daily, vi2:daily, s2:daily (NEW)
 
 export const revalidate = 0
 
 const REDIS_URL   = process.env.UPSTASH_REDIS_REST_URL
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN
 const CRON_SECRET = process.env.CRON_SECRET || 'arpi-cron-2026'
-
-const redisHeaders = {
-  Authorization: `Bearer ${REDIS_TOKEN}`,
-  'Content-Type': 'application/json',
-}
 
 async function redisGet(key) {
   try {
@@ -27,14 +20,13 @@ async function redisGet(key) {
 }
 
 async function redisHSet(hashKey, field, value) {
-  const res = await fetch(`${REDIS_URL}/hset/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}/${encodeURIComponent(JSON.stringify(value))}`, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-  })
+  const res = await fetch(
+    `${REDIS_URL}/hset/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}/${encodeURIComponent(JSON.stringify(value))}`,
+    { method: 'GET', headers: { Authorization: `Bearer ${REDIS_TOKEN}` } }
+  )
   return res.json()
 }
 
-// ── Fetch Bybit funding rate + OI (server-side accessible) ──────────────────
 async function getBybitFundingOI() {
   try {
     const [tickerRes, oiRes, takerRes] = await Promise.all([
@@ -43,19 +35,15 @@ async function getBybitFundingOI() {
       fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1d&limit=1'),
     ])
     const [ticker, oi, taker] = await Promise.all([tickerRes.json(), oiRes.json(), takerRes.json()])
-
     const t = ticker?.result?.list?.[0]
-    const fundingRate  = t ? parseFloat(t.fundingRate)       : 0
-    const oiUsd        = t ? parseFloat(t.openInterestValue) : 0
-    const price24hPcnt = t ? parseFloat(t.price24hPcnt)      : 0
-
-    const oiList = oi?.result?.list ?? []
-    const oiCurr = oiList[0] ? parseFloat(oiList[0].openInterest) : null
-    const oiPrev = oiList[1] ? parseFloat(oiList[1].openInterest) : null
-
+    const fundingRate    = t ? parseFloat(t.fundingRate)        : 0
+    const oiUsd          = t ? parseFloat(t.openInterestValue)  : 0
+    const price24hPcnt   = t ? parseFloat(t.price24hPcnt)       : 0
+    const oiList         = oi?.result?.list ?? []
+    const oiCurr         = oiList[0] ? parseFloat(oiList[0].openInterest) : null
+    const oiPrev         = oiList[1] ? parseFloat(oiList[1].openInterest) : null
     const takerList      = taker?.result?.list ?? []
     const takerBuyRatio  = takerList[0] ? parseFloat(takerList[0].buyRatio) * 100 : null
-
     return { fundingRate, oiUsd, price24hPcnt, oiCurr, oiPrev, takerBuyRatio }
   } catch {
     return { fundingRate: 0, oiUsd: 0, price24hPcnt: 0, oiCurr: null, oiPrev: null, takerBuyRatio: null }
@@ -97,7 +85,7 @@ async function getBtcDominance() {
     const btcMcapChangePct  = ((btcMcapNow - btcMcap3dAgo) / btcMcap3dAgo) * 100
     const impliedTotal3d    = mcapChange24h * 3
     const trend = Math.abs(btcMcapChangePct - impliedTotal3d) < 0.5 ? 'flat'
-      : btcMcapChangePct > impliedTotal3d ? 'rising' : 'falling'
+                : btcMcapChangePct > impliedTotal3d ? 'rising' : 'falling'
     return { dominanceNow: parseFloat(dominanceNow.toFixed(2)), btcMcapChangePct: parseFloat(btcMcapChangePct.toFixed(2)), trend }
   } catch { return null }
 }
@@ -111,7 +99,6 @@ async function getBtcPrice() {
 }
 
 export async function GET(request) {
-  // Verify cron secret
   const { searchParams } = new URL(request.url)
   const secret = searchParams.get('secret') || request.headers.get('x-cron-secret')
   if (secret !== CRON_SECRET) {
@@ -121,7 +108,7 @@ export async function GET(request) {
   try {
     const dateKey = new Date().toISOString().slice(0, 10)
 
-    const [bybit, fearGreed, tpiSignal, dominance, btcPrice, viSignal, vi2Signal] = await Promise.all([
+    const [bybit, fearGreed, tpiSignal, dominance, btcPrice, viSignal, vi2Signal, s2Signal] = await Promise.all([
       getBybitFundingOI(),
       getFearGreed(),
       getTpiSignal(),
@@ -129,24 +116,17 @@ export async function GET(request) {
       getBtcPrice(),
       redisGet('signal:vi'),
       redisGet('signal:vi2'),
+      redisGet('signal:s2'),  // NEW: fetch S2 signal for daily snapshot
     ])
 
-    const frOi = {
-      fundingRate:        bybit.fundingRate,
-      openInterestValue:  bybit.oiUsd,
-      price24hPcnt:       bybit.price24hPcnt,
-      markPrice:          0,
-    }
-
-    // Import buildChecklist logic inline (can't import from route.js server-side cleanly)
-    const frPct        = frOi.fundingRate * 100
-    const price24hPct  = frOi.price24hPcnt * 100
-    const oiRising     = bybit.oiCurr !== null && bybit.oiPrev !== null ? bybit.oiCurr > bybit.oiPrev : null
-    const priceUp      = price24hPct > 0
-    const priceDown    = price24hPct < 0
-    const hasDom       = dominance !== null && dominance?.trend !== null
-    const domRising    = hasDom ? dominance.trend === 'rising'  : null
-    const domFalling   = hasDom ? dominance.trend === 'falling' : null
+    const frPct       = bybit.fundingRate * 100
+    const price24hPct = bybit.price24hPcnt * 100
+    const oiRising    = bybit.oiCurr !== null && bybit.oiPrev !== null ? bybit.oiCurr > bybit.oiPrev : null
+    const priceUp     = price24hPct > 0
+    const priceDown   = price24hPct < 0
+    const hasDom      = dominance !== null && dominance?.trend !== null
+    const domRising   = hasDom ? dominance.trend === 'rising'  : null
+    const domFalling  = hasDom ? dominance.trend === 'falling' : null
 
     const c1Long  = frPct <= 0.005
     const c1Short = frPct > 0.05
@@ -156,8 +136,8 @@ export async function GET(request) {
     const c3Short = tpiSignal === 'SHORT'
     const c4Long  = oiRising !== null ? (oiRising && priceUp)   : null
     const c4Short = oiRising !== null ? (oiRising && priceDown) : null
-    const c5Long  = hasDom ? domRising  : null
-    const c5Short = hasDom ? domFalling : null
+    const c5Long  = hasDom ? domRising   : null
+    const c5Short = hasDom ? domFalling  : null
     const c6Long  = bybit.takerBuyRatio !== null ? bybit.takerBuyRatio > 52 : null
     const c6Short = bybit.takerBuyRatio !== null ? bybit.takerBuyRatio < 48 : null
 
@@ -165,43 +145,64 @@ export async function GET(request) {
     const shortScore = [c1Short, c2Short, c3Short, c4Short, c5Short, c6Short].filter(c => c === true).length
 
     const entry = {
-      date:       dateKey,
+      date:        dateKey,
       longScore,
       shortScore,
-      tpiState:   tpiSignal,
-      price:      btcPrice.price,
-      change24h:  btcPrice.change24h ? parseFloat(btcPrice.change24h.toFixed(2)) : null,
-      fg:         fearGreed,
-      frPct:      parseFloat(frPct.toFixed(4)),
+      tpiState:    tpiSignal,
+      price:       btcPrice.price,
+      change24h:   btcPrice.change24h ? parseFloat(btcPrice.change24h.toFixed(2)) : null,
+      fg:          fearGreed,
+      frPct:       parseFloat(frPct.toFixed(4)),
       fundingAvail: true,
-      tpiAvail:   tpiSignal !== null,
-      ts:         Date.now(),
+      tpiAvail:    tpiSignal !== null,
+      ts:          Date.now(),
     }
 
     const writes = [redisHSet('btc:checklist-daily', dateKey, entry)]
 
-    // Persist today's VI/VI2 values to their daily hashes so history accumulates
+    // VI / VI2 daily snapshots
     if (viSignal?.value != null) {
       writes.push(redisHSet('vi:daily', dateKey, {
-        value:      viSignal.value,
-        ts:         viSignal.ts,
-        updated_at: viSignal.updated_at,
-        date:       dateKey,
+        value: viSignal.value, ts: viSignal.ts, updated_at: viSignal.updated_at, date: dateKey,
       }))
     }
     if (vi2Signal?.value != null) {
       writes.push(redisHSet('vi2:daily', dateKey, {
-        value:      vi2Signal.value,
-        ts:         vi2Signal.ts,
-        updated_at: vi2Signal.updated_at,
-        date:       dateKey,
+        value: vi2Signal.value, ts: vi2Signal.ts, updated_at: vi2Signal.updated_at, date: dateKey,
+      }))
+    }
+
+    // ── NEW: S2 daily snapshot ────────────────────────────────────────────────
+    // Write today's S2 signal state into s2:daily so the equity curve accumulates
+    // even when no new TradingView webhook fires (signal unchanged days)
+    if (s2Signal) {
+      writes.push(redisHSet('s2:daily', dateKey, {
+        date:        dateKey,
+        asset:       s2Signal.asset    ?? null,
+        alloc:       s2Signal.alloc    ?? null,
+        scores:      s2Signal.scores   ?? null,
+        ts:          s2Signal.ts       ?? Date.now(),
+        updated_at:  s2Signal.updated_at ?? new Date().toISOString(),
+        // equity is computed server-side via CoinGecko prices — placeholder null,
+        // will be filled in by the signals API when it reconstructs history
+        equity:      null,
       }))
     }
 
     await Promise.all(writes)
 
-    return Response.json({ ok: true, date: dateKey, longScore, shortScore, tpiSignal,
-      vi: viSignal?.value ?? null, vi2: vi2Signal?.value ?? null, entry })
+    return Response.json({
+      ok: true,
+      date: dateKey,
+      longScore,
+      shortScore,
+      tpiSignal,
+      vi:  viSignal?.value  ?? null,
+      vi2: vi2Signal?.value ?? null,
+      s2_asset: s2Signal?.asset ?? null,
+      s2_alloc: s2Signal?.alloc ?? null,
+      entry,
+    })
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 })
   }
