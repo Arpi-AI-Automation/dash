@@ -1,124 +1,85 @@
 'use client'
 import { useEffect, useState } from 'react'
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
 function fmtPrice(v) {
   if (!v) return '—'
   return 'US$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 
-function fmtTpi(signal) {
+function tpiMeta(signal) {
+  if (!signal?.state) return { label: '—', color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
+  const s = signal.state
+  if (s.includes('MAX LONG'))  return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.2)' }
+  if (s.includes('LONG'))      return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.2)' }
+  if (s.includes('MAX SHORT')) return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)' }
+  if (s.includes('SHORT'))     return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)' }
+  return { label: s, color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
+}
+
+function fmtTpiDetail(signal) {
   if (!signal) return '—'
-  const tpi = signal.tpi ?? signal.tpi_bar ?? null
+  const tpi = signal.tpi ?? null
   const roc = signal.roc ?? null
-  const state = signal.state ?? ''
-
-  const stateLabel = state === 'LONG' ? 'long'
-    : state === 'SHORT'     ? 'short'
-    : state === 'MAX LONG'  ? 'max long'
-    : state === 'MAX SHORT' ? 'max short'
-    : state.toLowerCase() || '—'
-
-  let tpiDesc = stateLabel
-  if (tpi !== null) {
-    const abs = Math.abs(tpi)
-    const qualifier = abs < 0.15 ? 'marginally ' : abs < 0.4 ? 'weakly ' : abs < 0.7 ? '' : 'strongly '
-    tpiDesc = `${qualifier}${stateLabel} (${tpi >= 0 ? '+' : ''}${Number(tpi).toFixed(2)})`
-  }
-
-  let rocDesc = ''
-  if (roc !== null) {
-    const r = Number(roc)
-    if (Math.abs(r) < 0.05)  rocDesc = 'steady'
-    else if (r > 0.3)         rocDesc = `positive RoC (+${r.toFixed(2)})`
-    else if (r > 0)           rocDesc = `positive RoC (+${r.toFixed(2)})`
-    else if (r < -0.3)        rocDesc = `negative RoC (${r.toFixed(2)})`
-    else                      rocDesc = `negative RoC (${r.toFixed(2)})`
-  }
-
-  return rocDesc ? `${tpiDesc} / ${rocDesc}` : tpiDesc
+  const state = tpiMeta(signal).label
+  const tpiStr = tpi !== null ? ` (${tpi >= 0 ? '+' : ''}${Number(tpi).toFixed(2)})` : ''
+  const rocStr = roc !== null ? ` / ${Math.abs(roc) < 0.05 ? 'steady' : roc > 0 ? `rising RoC +${Number(roc).toFixed(2)}` : `falling RoC ${Number(roc).toFixed(2)}`}` : ''
+  return `${state.toLowerCase()}${tpiStr}${rocStr}`
 }
 
-function tpiColor(signal) {
-  if (!signal?.state) return '#ffffff'
-  return signal.state.includes('LONG') ? '#4ade80' : signal.state.includes('SHORT') ? '#f87171' : '#ffffff'
-}
-
-// Handles both "eth", "ETH", "ETHUSD", "ETHUSDT" etc.
 function normaliseAsset(raw) {
   if (!raw) return null
   const s = raw.toUpperCase().replace(/(USD[T]?|USDT|PERP)$/, '').trim()
-  const MAP = { BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', SUI: 'SUI', XRP: 'XRP', BNB: 'BNB', PAXG: 'GOLD', USD: 'USD' }
+  const MAP = { BTC:'BTC', ETH:'ETH', SOL:'SOL', SUI:'SUI', XRP:'XRP', BNB:'BNB', PAXG:'GOLD', USD:'USD' }
   return MAP[s] ?? s
 }
 
-function assetKey(raw) {
-  if (!raw) return 'usd'
-  const s = raw.toLowerCase()
-  if (s.includes('bnb'))  return 'bnb'
-  if (s.includes('eth'))  return 'eth'
-  if (s.includes('sol'))  return 'sol'
-  if (s.includes('xrp'))  return 'xrp'
-  if (s.includes('paxg')) return 'paxg'
-  if (s.includes('sui'))  return 'sui'
-  return 'usd'
-}
-
 function fmtS1(signal) {
-  // Match RotationChart behaviour: defaults to USD when no signal
-  const key = assetKey(signal?.asset)
-  return key.toUpperCase().replace('PAXG', 'GOLD')
+  if (!signal?.asset) return 'USD'
+  const s = signal.asset.toLowerCase()
+  if (s.includes('bnb')) return 'BNB'
+  if (s.includes('eth')) return 'ETH'
+  if (s.includes('sol')) return 'SOL'
+  if (s.includes('xrp')) return 'XRP'
+  if (s.includes('paxg')) return 'GOLD'
+  if (s.includes('sui')) return 'SUI'
+  return 'USD'
 }
 
 function fmtS2(signal) {
-  if (!signal) return 'No data yet'
+  if (!signal) return '—'
   if (signal.alloc) {
-    const entries = Object.entries(signal.alloc)
-      .filter(([, v]) => v > 0)
-      .sort(([, a], [, b]) => b - a)
-    if (entries.length)
-      return entries.map(([k, v]) => `${v}% ${normaliseAsset(k)}`).join(' + ')
+    const entries = Object.entries(signal.alloc).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a)
+    if (entries.length) return entries.map(([k, v]) => `${v}% ${normaliseAsset(k)}`).join(' + ')
   }
-  return normaliseAsset(signal.asset) ?? signal.asset ?? '—'
+  return normaliseAsset(signal.asset) ?? '—'
 }
 
-function viColor(v) {
-  if (v == null) return '#ffffff'
+function viMeta(v) {
+  if (v == null) return { color: '#6b7280', zone: '—', bg: 'rgba(107,114,128,.08)', border: 'rgba(107,114,128,.2)', pill: 'N/A' }
   const n = parseFloat(v)
-  if (n >=  2) return '#f87171'
-  if (n >=  1) return '#fb923c'
-  if (n > -1)  return '#ffffff'
-  if (n > -2)  return '#4ade80'
-  return '#22c55e'
+  if (n >= 2)  return { color: '#dc2626', zone: 'overbought', bg: 'rgba(239,68,68,.08)',   border: 'rgba(239,68,68,.2)',   pill: 'OVERBOUGHT' }
+  if (n >= 1)  return { color: '#f97316', zone: 'elevated',   bg: 'rgba(249,115,22,.08)',  border: 'rgba(249,115,22,.2)',  pill: 'ELEVATED' }
+  if (n > -1)  return { color: '#f59e0b', zone: 'neutral',    bg: 'rgba(245,158,11,.08)',  border: 'rgba(245,158,11,.2)',  pill: 'NEUTRAL' }
+  if (n > -2)  return { color: '#10b981', zone: 'good value', bg: 'rgba(16,185,129,.08)',  border: 'rgba(16,185,129,.2)',  pill: 'GOOD VALUE' }
+  return              { color: '#059669', zone: 'deep value', bg: 'rgba(16,185,129,.1)',   border: 'rgba(16,185,129,.3)',  pill: 'DEEP VALUE' }
 }
 
-function fmtVi(signal) {
-  if (!signal || signal.value == null) return 'Awaiting first webhook'
-  const v = parseFloat(signal.value)
-  const sign = v >= 0 ? '+' : ''
-  const zone = v >= 2 ? 'overbought' : v >= 1 ? 'elevated' : v > -1 ? 'neutral' : v > -2 ? 'good value' : 'deep value'
-  return `${sign}${v.toFixed(3)} (${zone})`
+const PILL = {
+  display: 'inline-block', padding: '2px 9px', borderRadius: 20,
+  fontSize: 11, fontWeight: 700, lineHeight: 1.4,
 }
-
-// ── Shared text style — matches "GM." size and weight ──────────────────────
-const BASE = {
-  fontFamily: 'monospace',
-  fontSize: 22,
-  fontWeight: 700,
-  letterSpacing: 1,
-  lineHeight: 1.5,
-}
-
 const LABEL = {
-  ...BASE,
-  color: '#888888',
-  fontWeight: 400,
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+  fontSize: 11, fontWeight: 600, color: '#6b7280',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
+}
+const ROW = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '8px 0', borderBottom: '1px solid #f3f4f6',
 }
 
-// ── Component ──────────────────────────────────────────────────────────────
 export default function DailyBrief() {
-  const [data, setData]       = useState(null)
+  const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -130,60 +91,93 @@ export default function DailyBrief() {
   }, [])
 
   if (loading) return (
-    <div style={{ padding: '20px 24px', borderBottom: '1px solid #1a1a1a' }}>
-      <span style={{ ...BASE, color: '#444' }}>LOADING...</span>
+    <div style={{ padding: '1.25rem' }}>
+      <div style={{ ...LABEL, color: '#d1d5db' }}>Loading...</div>
     </div>
   )
 
-  if (!data) return null
+  const btc    = data?.btc
+  const rot    = data?.rotation
+  const s2     = data?.s2
+  const vi     = data?.vi
+  const vi2    = data?.vi2
+  const tpi    = tpiMeta(btc)
+  const viM    = viMeta(vi?.value)
+  const vi2M   = viMeta(vi2?.value)
 
   return (
-    <div style={{ borderBottom: '1px solid #1a1a1a', padding: '20px 24px 20px', background: '#080808' }}>
-
-      {/* Line 1: GM. UTC close update. BTC price */}
-      <div style={{ marginBottom: 10 }}>
-        <span style={{ ...BASE, color: '#ffffff' }}>GM. </span>
-        <span style={{ ...BASE, color: '#ffffff', fontWeight: 700 }}>UTC close update. </span>
-        <span style={{ ...BASE, color: '#f7931a' }}>
-          BTC {fmtPrice(data.btc?.price)}
-        </span>
+    <div>
+      {/* Price hero */}
+      <div style={{ marginBottom: '1rem' }}>
+        <div style={{ ...LABEL, marginBottom: 4 }}>UTC close update</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 28, fontWeight: 800, color: '#111827', lineHeight: 1 }}>
+            {fmtPrice(btc?.price)}
+          </span>
+          {btc?.state && (
+            <span style={{ ...PILL, background: tpi.bg, color: tpi.color, border: `1px solid ${tpi.border}` }}>
+              TPI {tpi.label}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* MTPI */}
-      <div style={{ marginBottom: 4 }}>
-        <span style={LABEL}>MTPI: </span>
-        <span style={{ ...BASE, color: tpiColor(data.btc) }}>{fmtTpi(data.btc)}</span>
-      </div>
+      <div style={{ borderTop: '1px solid #f3f4f6' }}>
 
-      {/* System 1 */}
-      <div style={{ marginBottom: 4 }}>
-        <span style={LABEL}>ROTATOOOR System 1: </span>
-        <span style={{ ...BASE, color: '#ffffff' }}>{fmtS1(data.rotation)}</span>
-      </div>
+        {/* MTPI */}
+        <div style={ROW}>
+          <span style={LABEL}>MTPI</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: tpi.color, textAlign: 'right', maxWidth: '65%' }}>
+            {fmtTpiDetail(btc)}
+          </span>
+        </div>
 
-      {/* System 2 */}
-      <div style={{ marginBottom: 16 }}>
-        <span style={LABEL}>ROTATOOOR System 2: </span>
-        <span style={{ ...BASE, color: '#ffffff' }}>{fmtS2(data.s2)}</span>
-      </div>
+        {/* System 1 */}
+        <div style={ROW}>
+          <span style={LABEL}>ROTATOOOR System 1</span>
+          <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>{fmtS1(rot)}</span>
+        </div>
 
-      {/* Market Cycle header */}
-      <div style={{ marginBottom: 6 }}>
-        <span style={{ ...BASE, color: '#ffffff', fontWeight: 700 }}>Market Cycle</span>
-      </div>
+        {/* System 2 */}
+        <div style={ROW}>
+          <span style={LABEL}>ROTATOOOR System 2</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', maxWidth: '55%' }}>{fmtS2(s2)}</span>
+        </div>
 
-      {/* VI */}
-      <div style={{ marginBottom: 4 }}>
-        <span style={LABEL}>Short-term BTC valuation: </span>
-        <span style={{ ...BASE, color: viColor(data.vi?.value) }}>{fmtVi(data.vi)}</span>
-      </div>
+        {/* Market Cycle header */}
+        <div style={{ padding: '10px 0 6px', borderBottom: '1px solid #f3f4f6' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Market Cycle
+          </span>
+        </div>
 
-      {/* VI-2 */}
-      <div>
-        <span style={LABEL}>Full-cycle BTC valuation: </span>
-        <span style={{ ...BASE, color: viColor(data.vi2?.value) }}>{fmtVi(data.vi2)}</span>
-      </div>
+        {/* Short-term VI */}
+        <div style={ROW}>
+          <span style={LABEL}>Short-term valuation</span>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: viM.color, marginRight: 6 }}>
+              {vi?.value != null ? (vi.value >= 0 ? '+' : '') + Number(vi.value).toFixed(3) : '—'}
+            </span>
+            <span style={{ ...PILL, background: viM.bg, color: viM.color, border: `1px solid ${viM.border}`, fontSize: 10 }}>
+              {viM.pill}
+            </span>
+          </div>
+        </div>
 
+        {/* Full-cycle VI */}
+        <div style={{ ...ROW, borderBottom: 'none', paddingBottom: 0 }}>
+          <span style={LABEL}>Full-cycle valuation</span>
+          <div style={{ textAlign: 'right' }}>
+            <span style={{ fontSize: 14, fontWeight: 800, color: vi2M.color, marginRight: 6 }}>
+              {vi2?.value != null ? (vi2.value >= 0 ? '+' : '') + Number(vi2.value).toFixed(3) : '—'}
+            </span>
+            <span style={{ ...PILL, background: vi2M.bg, color: vi2M.color, border: `1px solid ${vi2M.border}`, fontSize: 10 }}>
+              {vi2M.pill}
+            </span>
+          </div>
+        </div>
+
+      </div>
     </div>
   )
 }
