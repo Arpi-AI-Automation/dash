@@ -91,7 +91,7 @@ export default function Home() {
         {/* ROW 5 — Fear & Greed + TPI Gauge */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardPad}>
-            <span style={LABEL}>Fear & Greed</span>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Fear & Greed</div>
             <FearGreed />
           </div>
           <TvSignalGauge />
