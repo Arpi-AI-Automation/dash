@@ -1,6 +1,6 @@
 // app/api/cron/daily-score/route.js
-// Runs at UTC midnight via Vercel cron.
-// Writes: btc:checklist-daily, vi:daily, vi2:daily, s2:daily (NEW)
+// Runs at UTC 00:05 via Vercel cron.
+// Writes: btc:checklist-daily, vi:daily, vi2:daily, s2:daily (with equity)
 
 export const revalidate = 0
 
@@ -19,12 +19,110 @@ async function redisGet(key) {
   } catch { return null }
 }
 
+async function redisHGet(hashKey, field) {
+  try {
+    const res  = await fetch(`${REDIS_URL}/hget/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}`, {
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    })
+    const data = await res.json()
+    if (!data.result) return null
+    return JSON.parse(data.result)
+  } catch { return null }
+}
+
 async function redisHSet(hashKey, field, value) {
   const res = await fetch(
     `${REDIS_URL}/hset/${encodeURIComponent(hashKey)}/${encodeURIComponent(field)}/${encodeURIComponent(JSON.stringify(value))}`,
     { method: 'GET', headers: { Authorization: `Bearer ${REDIS_TOKEN}` } }
   )
   return res.json()
+}
+
+async function redisHGetAll(hashKey) {
+  try {
+    const res  = await fetch(`${REDIS_URL}/hgetall/${encodeURIComponent(hashKey)}`, {
+      headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    })
+    const data = await res.json()
+    if (!data.result || !Array.isArray(data.result)) return []
+    const entries = []
+    for (let i = 0; i < data.result.length; i += 2) {
+      try {
+        let parsed = JSON.parse(data.result[i + 1])
+        if (typeof parsed === 'string') parsed = JSON.parse(parsed)
+        entries.push({ date: data.result[i], ...parsed })
+      } catch {}
+    }
+    return entries.sort((a, b) => a.date.localeCompare(b.date))
+  } catch { return [] }
+}
+
+// ── CoinGecko: fetch multi-asset prices in one call ──────────────────────────
+// Returns { eth: 2050.5, paxg: 3200.1, btc: 87000, ... } or null on failure
+async function getCoinGeckoPrices(ids = ['ethereum','pax-gold','bitcoin','solana','ripple','binancecoin','sui']) {
+  try {
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd`
+    const res  = await fetch(url)
+    const data = await res.json()
+    return {
+      eth:  data.ethereum?.usd        ?? null,
+      paxg: data['pax-gold']?.usd     ?? null,
+      btc:  data.bitcoin?.usd         ?? null,
+      sol:  data.solana?.usd          ?? null,
+      xrp:  data.ripple?.usd          ?? null,
+      bnb:  data.binancecoin?.usd     ?? null,
+      sui:  data.sui?.usd             ?? null,
+      usd:  1.0,
+    }
+  } catch { return null }
+}
+
+// ── Compute S2 portfolio equity ───────────────────────────────────────────────
+// Strategy: hold fixed-quantity basket based on alloc weights applied to
+// starting portfolio value. Track portfolio value / starting value each day.
+//
+// We use the FIRST s2:daily entry as the starting point (equity = 1.0).
+// Each subsequent day we recompute the current alloc's portfolio value
+// relative to that starting day's prices.
+//
+// alloc example: { btc: 0, eth: 60, paxg: 40, ... }  (percentages, sum = 100)
+// We weight today's prices by alloc and normalise against starting-day prices.
+async function computeS2Equity(alloc, prices, allDailyEntries) {
+  if (!alloc || !prices) return null
+
+  // Normalise alloc to fractions (handle 0-100 or 0-1 scale)
+  const allocSum = Object.values(alloc).reduce((s, v) => s + v, 0)
+  if (allocSum === 0) return null
+  const scale = allocSum > 1 ? 100 : 1  // if stored as 60/40 → divide by 100
+  const weights = Object.fromEntries(Object.entries(alloc).map(([k, v]) => [k, v / scale]))
+
+  // Find the first entry with stored prices to use as base
+  const baseEntry = allDailyEntries.find(e => e.base_prices != null)
+
+  if (!baseEntry) {
+    // No base yet — this is day 1, return equity 1.0 and store base prices
+    return { equity: 1.0, isBase: true }
+  }
+
+  // Compute today's weighted portfolio value relative to base
+  const basePrices = baseEntry.base_prices
+  let portfolioReturn = 0
+  let totalWeight = 0
+
+  for (const [asset, weight] of Object.entries(weights)) {
+    if (weight === 0) continue
+    const basePrice   = basePrices[asset]
+    const todayPrice  = prices[asset]
+    if (!basePrice || !todayPrice) continue
+    portfolioReturn += weight * (todayPrice / basePrice)
+    totalWeight     += weight
+  }
+
+  if (totalWeight === 0) return null
+
+  // Normalise for any missing assets
+  const equity = portfolioReturn / totalWeight
+  return { equity: parseFloat(equity.toFixed(6)), isBase: false }
 }
 
 async function getBybitFundingOI() {
@@ -36,15 +134,14 @@ async function getBybitFundingOI() {
     ])
     const [ticker, oi, taker] = await Promise.all([tickerRes.json(), oiRes.json(), takerRes.json()])
     const t = ticker?.result?.list?.[0]
-    const fundingRate    = t ? parseFloat(t.fundingRate)        : 0
-    const oiUsd          = t ? parseFloat(t.openInterestValue)  : 0
-    const price24hPcnt   = t ? parseFloat(t.price24hPcnt)       : 0
-    const oiList         = oi?.result?.list ?? []
-    const oiCurr         = oiList[0] ? parseFloat(oiList[0].openInterest) : null
-    const oiPrev         = oiList[1] ? parseFloat(oiList[1].openInterest) : null
-    const takerList      = taker?.result?.list ?? []
-    const takerBuyRatio  = takerList[0] ? parseFloat(takerList[0].buyRatio) * 100 : null
-    return { fundingRate, oiUsd, price24hPcnt, oiCurr, oiPrev, takerBuyRatio }
+    return {
+      fundingRate:   t ? parseFloat(t.fundingRate)       : 0,
+      oiUsd:         t ? parseFloat(t.openInterestValue) : 0,
+      price24hPcnt:  t ? parseFloat(t.price24hPcnt)      : 0,
+      oiCurr:        oi?.result?.list?.[0] ? parseFloat(oi.result.list[0].openInterest) : null,
+      oiPrev:        oi?.result?.list?.[1] ? parseFloat(oi.result.list[1].openInterest) : null,
+      takerBuyRatio: taker?.result?.list?.[0] ? parseFloat(taker.result.list[0].buyRatio) * 100 : null,
+    }
   } catch {
     return { fundingRate: 0, oiUsd: 0, price24hPcnt: 0, oiCurr: null, oiPrev: null, takerBuyRatio: null }
   }
@@ -80,22 +177,18 @@ async function getBtcDominance() {
     const mcapChange24h = globalData.data?.market_cap_change_percentage_24h_usd ?? 0
     const btcCaps       = histData.market_caps ?? []
     if (!dominanceNow || btcCaps.length < 4 || !totalMcapNow) return { dominanceNow, trend: null }
-    const btcMcap3dAgo      = btcCaps[0][1]
-    const btcMcapNow        = btcCaps[btcCaps.length - 1][1]
-    const btcMcapChangePct  = ((btcMcapNow - btcMcap3dAgo) / btcMcap3dAgo) * 100
-    const impliedTotal3d    = mcapChange24h * 3
+    const btcMcap3dAgo     = btcCaps[0][1]
+    const btcMcapNow       = btcCaps[btcCaps.length - 1][1]
+    const btcMcapChangePct = ((btcMcapNow - btcMcap3dAgo) / btcMcap3dAgo) * 100
+    const impliedTotal3d   = mcapChange24h * 3
     const trend = Math.abs(btcMcapChangePct - impliedTotal3d) < 0.5 ? 'flat'
                 : btcMcapChangePct > impliedTotal3d ? 'rising' : 'falling'
-    return { dominanceNow: parseFloat(dominanceNow.toFixed(2)), btcMcapChangePct: parseFloat(btcMcapChangePct.toFixed(2)), trend }
+    return {
+      dominanceNow: parseFloat(dominanceNow.toFixed(2)),
+      btcMcapChangePct: parseFloat(btcMcapChangePct.toFixed(2)),
+      trend,
+    }
   } catch { return null }
-}
-
-async function getBtcPrice() {
-  try {
-    const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true')
-    const d   = await res.json()
-    return { price: d.bitcoin?.usd ?? null, change24h: d.bitcoin?.usd_24h_change ?? null }
-  } catch { return { price: null, change24h: null } }
 }
 
 export async function GET(request) {
@@ -108,17 +201,25 @@ export async function GET(request) {
   try {
     const dateKey = new Date().toISOString().slice(0, 10)
 
-    const [bybit, fearGreed, tpiSignal, dominance, btcPrice, viSignal, vi2Signal, s2Signal] = await Promise.all([
-      getBybitFundingOI(),
-      getFearGreed(),
-      getTpiSignal(),
-      getBtcDominance(),
-      getBtcPrice(),
-      redisGet('signal:vi'),
-      redisGet('signal:vi2'),
-      redisGet('signal:s2'),  // NEW: fetch S2 signal for daily snapshot
-    ])
+    // Fetch everything in parallel
+    const [bybit, fearGreed, tpiSignal, dominance, viSignal, vi2Signal, s2Signal, allPrices, existingS2Daily] =
+      await Promise.all([
+        getBybitFundingOI(),
+        getFearGreed(),
+        getTpiSignal(),
+        getBtcDominance(),
+        redisGet('signal:vi'),
+        redisGet('signal:vi2'),
+        redisGet('signal:s2'),
+        getCoinGeckoPrices(),          // multi-asset prices for S2 equity
+        redisHGetAll('s2:daily'),      // existing S2 history to find base prices
+      ])
 
+    // BTC price from prices call (already fetched above)
+    const btcPrice = allPrices?.btc ?? null
+    const btcChange24h = null  // not available from simple/price, fine to omit
+
+    // ── Checklist conditions ──────────────────────────────────────────────────
     const frPct       = bybit.fundingRate * 100
     const price24hPct = bybit.price24hPcnt * 100
     const oiRising    = bybit.oiCurr !== null && bybit.oiPrev !== null ? bybit.oiCurr > bybit.oiPrev : null
@@ -128,12 +229,10 @@ export async function GET(request) {
     const domRising   = hasDom ? dominance.trend === 'rising'  : null
     const domFalling  = hasDom ? dominance.trend === 'falling' : null
 
-    const c1Long  = frPct <= 0.005
-    const c1Short = frPct > 0.05
-    const c2Long  = fearGreed !== null ? fearGreed < 30  : null
-    const c2Short = fearGreed !== null ? fearGreed > 70  : null
-    const c3Long  = tpiSignal === 'LONG'
-    const c3Short = tpiSignal === 'SHORT'
+    const c1Long  = frPct <= 0.005;  const c1Short = frPct > 0.05
+    const c2Long  = fearGreed !== null ? fearGreed < 30 : null
+    const c2Short = fearGreed !== null ? fearGreed > 70 : null
+    const c3Long  = tpiSignal === 'LONG';  const c3Short = tpiSignal === 'SHORT'
     const c4Long  = oiRising !== null ? (oiRising && priceUp)   : null
     const c4Short = oiRising !== null ? (oiRising && priceDown) : null
     const c5Long  = hasDom ? domRising   : null
@@ -144,13 +243,11 @@ export async function GET(request) {
     const longScore  = [c1Long,  c2Long,  c3Long,  c4Long,  c5Long,  c6Long ].filter(c => c === true).length
     const shortScore = [c1Short, c2Short, c3Short, c4Short, c5Short, c6Short].filter(c => c === true).length
 
-    const entry = {
-      date:        dateKey,
-      longScore,
-      shortScore,
+    const checklistEntry = {
+      date: dateKey, longScore, shortScore,
       tpiState:    tpiSignal,
-      price:       btcPrice.price,
-      change24h:   btcPrice.change24h ? parseFloat(btcPrice.change24h.toFixed(2)) : null,
+      price:       btcPrice,
+      change24h:   btcChange24h,
       fg:          fearGreed,
       frPct:       parseFloat(frPct.toFixed(4)),
       fundingAvail: true,
@@ -158,9 +255,9 @@ export async function GET(request) {
       ts:          Date.now(),
     }
 
-    const writes = [redisHSet('btc:checklist-daily', dateKey, entry)]
+    const writes = [redisHSet('btc:checklist-daily', dateKey, checklistEntry)]
 
-    // VI / VI2 daily snapshots
+    // ── VI / VI2 snapshots ────────────────────────────────────────────────────
     if (viSignal?.value != null) {
       writes.push(redisHSet('vi:daily', dateKey, {
         value: viSignal.value, ts: viSignal.ts, updated_at: viSignal.updated_at, date: dateKey,
@@ -172,21 +269,62 @@ export async function GET(request) {
       }))
     }
 
-    // ── NEW: S2 daily snapshot ────────────────────────────────────────────────
-    // Write today's S2 signal state into s2:daily so the equity curve accumulates
-    // even when no new TradingView webhook fires (signal unchanged days)
-    if (s2Signal) {
-      writes.push(redisHSet('s2:daily', dateKey, {
+    // ── S2 daily snapshot WITH equity ─────────────────────────────────────────
+    let s2EquityResult = null
+    if (s2Signal && allPrices) {
+      const alloc = s2Signal.alloc  // e.g. { eth: 60, paxg: 40, btc: 0, ... }
+
+      // Find base entry — the earliest s2:daily that has base_prices stored
+      // If none exists yet, today becomes the base (equity = 1.0, store base_prices)
+      const existingWithBase = existingS2Daily.filter(e => e.base_prices != null)
+
+      let equity    = null
+      let isBase    = false
+      let basePrices = null
+
+      if (existingWithBase.length === 0) {
+        // First ever entry — this is the base day
+        equity    = 1.0
+        isBase    = true
+        basePrices = allPrices  // store today's prices as the base
+      } else {
+        // Compute today's equity vs base
+        const base = existingWithBase[0]  // oldest base entry
+        const bp   = base.base_prices
+
+        // Weight today's prices by allocation
+        const allocSum = Object.values(alloc || {}).reduce((s, v) => s + v, 0)
+        if (allocSum > 0 && bp) {
+          const scl = allocSum > 1 ? 100 : 1
+          let portfolioReturn = 0, totalWeight = 0
+          for (const [asset, rawW] of Object.entries(alloc)) {
+            const w = rawW / scl
+            if (w === 0) continue
+            const baseP  = bp[asset]
+            const todayP = allPrices[asset]
+            if (!baseP || !todayP) continue
+            portfolioReturn += w * (todayP / baseP)
+            totalWeight     += w
+          }
+          if (totalWeight > 0) {
+            equity = parseFloat((portfolioReturn / totalWeight).toFixed(6))
+          }
+        }
+      }
+
+      const s2Entry = {
         date:        dateKey,
-        asset:       s2Signal.asset    ?? null,
-        alloc:       s2Signal.alloc    ?? null,
-        scores:      s2Signal.scores   ?? null,
-        ts:          s2Signal.ts       ?? Date.now(),
-        updated_at:  s2Signal.updated_at ?? new Date().toISOString(),
-        // equity is computed server-side via CoinGecko prices — placeholder null,
-        // will be filled in by the signals API when it reconstructs history
-        equity:      null,
-      }))
+        asset:       s2Signal.asset   ?? null,
+        alloc:       s2Signal.alloc   ?? null,
+        scores:      s2Signal.scores  ?? null,
+        ts:          Date.now(),
+        updated_at:  new Date().toISOString(),
+        equity,                         // computed portfolio return vs base day
+        ...(isBase ? { base_prices: allPrices } : {}),  // only on first entry
+      }
+
+      writes.push(redisHSet('s2:daily', dateKey, s2Entry))
+      s2EquityResult = { equity, isBase }
     }
 
     await Promise.all(writes)
@@ -197,11 +335,12 @@ export async function GET(request) {
       longScore,
       shortScore,
       tpiSignal,
-      vi:  viSignal?.value  ?? null,
-      vi2: vi2Signal?.value ?? null,
-      s2_asset: s2Signal?.asset ?? null,
-      s2_alloc: s2Signal?.alloc ?? null,
-      entry,
+      vi:       viSignal?.value  ?? null,
+      vi2:      vi2Signal?.value ?? null,
+      s2_asset: s2Signal?.asset  ?? null,
+      s2_alloc: s2Signal?.alloc  ?? null,
+      s2_equity: s2EquityResult,
+      btc_price: btcPrice,
     })
   } catch (err) {
     return Response.json({ ok: false, error: err.message }, { status: 500 })
