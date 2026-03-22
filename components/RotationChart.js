@@ -1,8 +1,6 @@
 'use client'
-
 import { useEffect, useRef, useState } from 'react'
 
-// ─── Asset config ─────────────────────────────────────────────────────────────
 const ASSETS = [
   { key: 'bnb',  label: 'BNB',  color: '#f3ba2f' },
   { key: 'eth',  label: 'ETH',  color: '#627eea' },
@@ -12,11 +10,9 @@ const ASSETS = [
   { key: 'sui',  label: 'SUI',  color: '#4da2ff' },
   { key: 'usd',  label: 'USD',  color: '#6b7280' },
 ]
-
 const ASSET_COLOR = Object.fromEntries(ASSETS.map(a => [a.key, a.color]))
 const ASSET_LABEL = Object.fromEntries(ASSETS.map(a => [a.key, a.label]))
 
-// Match TV ticker → our key
 function assetKey(tvAsset) {
   if (!tvAsset) return 'usd'
   const s = tvAsset.toLowerCase()
@@ -29,24 +25,25 @@ function assetKey(tvAsset) {
   return 'usd'
 }
 
-const fmtMultiple = v => v != null ? v.toFixed(3) + 'x' : '—'
+const LABEL = {
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+  fontSize: 11, fontWeight: 600, color: '#6b7280',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
+}
 
-// ─── Equity curve canvas ──────────────────────────────────────────────────────
+// ─── Equity canvas ────────────────────────────────────────────────────────────
 function EquityCanvas({ history, transitions }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
     if (!canvasRef.current || !history?.length || !transitions?.length) return
     const canvas = canvasRef.current
-    const ctx    = canvas.getContext('2d')
-    const dpr    = window.devicePixelRatio || 1
-    const W      = canvas.clientWidth
-    const H      = canvas.clientHeight
-    canvas.width  = W * dpr
-    canvas.height = H * dpr
+    const ctx = canvas.getContext('2d')
+    const dpr = window.devicePixelRatio || 1
+    const W = canvas.clientWidth, H = canvas.clientHeight
+    canvas.width = W * dpr; canvas.height = H * dpr
     ctx.scale(dpr, dpr)
 
-    // Deduplicate: one entry per calendar day (last wins)
     const dayMap = {}
     history.forEach(p => {
       if (!p.date) return
@@ -58,92 +55,62 @@ function EquityCanvas({ history, transitions }) {
     const dateToIdx = {}
     pts.forEach((p, i) => { dateToIdx[p.date] = i })
 
-    // Build equity curve: hold selected asset, flat when USD
-    // Uses prev day's asset (no repaint)
-    const eqNorm = new Array(pts.length).fill(null)
-    eqNorm[0] = 1.0
-
-    // Build date→asset map from transitions (sorted ascending)
     const sortedT = [...transitions].sort((a, b) => a.date.localeCompare(b.date))
-
     const dateAssetMap = {}
     for (let i = 0; i < sortedT.length; i++) {
-      const tDate    = sortedT[i].date
-      const tAsset   = assetKey(sortedT[i].asset)
+      const tDate  = sortedT[i].date
+      const tAsset = assetKey(sortedT[i].asset)
       const nextDate = sortedT[i + 1]?.date ?? '9999-12-31'
-      pts.forEach(p => {
-        if (p.date >= tDate && p.date < nextDate) dateAssetMap[p.date] = tAsset
-      })
+      pts.forEach(p => { if (p.date >= tDate && p.date < nextDate) dateAssetMap[p.date] = tAsset })
     }
 
-    // Equity values are pre-computed server-side (fixed-quantity model, real CoinGecko prices)
-    // Each entry has .equity stored directly — just read it
-    for (let i = 0; i < pts.length; i++) {
-      eqNorm[i] = pts[i].equity ?? eqNorm[i - 1] ?? 1.0
-    }
+    const eqNorm = new Array(pts.length).fill(null)
+    for (let i = 0; i < pts.length; i++) { eqNorm[i] = pts[i].equity ?? eqNorm[i - 1] ?? 1.0 }
+    for (let i = 1; i < pts.length; i++) { if (eqNorm[i] === null) eqNorm[i] = eqNorm[i - 1] }
 
-    // Safety fill
-    for (let i = 1; i < pts.length; i++) {
-      if (eqNorm[i] === null) eqNorm[i] = eqNorm[i - 1]
-    }
-
-    // ── Layout ────────────────────────────────────────────────────────────────
-    const pad = { t: 12, r: 56, b: 28, l: 16 }
-    const cw  = W - pad.l - pad.r
-    const ch  = H - pad.t - pad.b
+    const pad = { t: 12, r: 56, b: 28, l: 48 }
+    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b
 
     ctx.clearRect(0, 0, W, H)
-    ctx.fillStyle = '#0f172a'
-    ctx.fillRect(0, 0, W, H)
+    ctx.fillStyle = '#f9fafb'
+    ctx.fillRect(pad.l, pad.t, cw, ch)
 
     const eqValid = eqNorm.filter(Boolean)
-    const minEq   = Math.min(...eqValid) * 0.97
-    const maxEq   = Math.max(...eqValid) * 1.03
+    const minEq = Math.min(...eqValid) * 0.97, maxEq = Math.max(...eqValid) * 1.03
     const rangeEq = maxEq - minEq || 1
-
     const eX = i => pad.l + (cw * i) / (pts.length - 1)
     const eY = v => pad.t + ch - (ch * (v - minEq)) / rangeEq
 
-    // Grid lines
-    ctx.font = '9px monospace'
-    ctx.textAlign = 'right'
+    ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'right'
     for (let i = 0; i <= 3; i++) {
       const v = minEq + (rangeEq * i) / 3
       const y = pad.t + ch - (ch * i) / 3
-      ctx.strokeStyle = '#1f2937'
-      ctx.lineWidth = 0.5
+      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
-      ctx.fillStyle = '#6b7280'
-      ctx.fillText(v.toFixed(2) + 'x', W - 4, y + 3)
+      ctx.fillStyle = '#9ca3af'
+      ctx.fillText(v.toFixed(2) + 'x', pad.l - 4, y + 3)
     }
 
-    // Baseline 1x
-    const baseY = eY(1.0)
-    ctx.strokeStyle = '#374151'
-    ctx.lineWidth = 0.8
-    ctx.setLineDash([4, 4])
-    ctx.beginPath(); ctx.moveTo(pad.l, baseY); ctx.lineTo(pad.l + cw, baseY); ctx.stroke()
+    // 1x baseline
+    const byY = eY(1.0)
+    ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 0.8; ctx.setLineDash([4, 4])
+    ctx.beginPath(); ctx.moveTo(pad.l, byY); ctx.lineTo(pad.l + cw, byY); ctx.stroke()
     ctx.setLineDash([])
 
-    // Colour equity line segments by asset
+    // Coloured segments by asset
     let segStart = 0
-    const drawSegment = (from, to, color) => {
+    const drawSeg = (from, to, color) => {
       if (to <= from) return
       ctx.beginPath()
       ctx.moveTo(eX(from), eY(eqNorm[from]))
-      for (let k = from + 1; k <= to; k++) {
-        ctx.lineTo(eX(k), eY(eqNorm[k]))
-      }
-      ctx.strokeStyle = color
-      ctx.lineWidth = 2
-      ctx.stroke()
+      for (let k = from + 1; k <= to; k++) ctx.lineTo(eX(k), eY(eqNorm[k]))
+      ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke()
     }
-
     for (let i = 1; i <= pts.length; i++) {
-      const prevAsset = dateAssetMap[pts[i - 1]?.date] ?? 'usd'
-      const curAsset  = i < pts.length ? (dateAssetMap[pts[i]?.date] ?? 'usd') : null
-      if (curAsset !== prevAsset || i === pts.length) {
-        drawSegment(segStart, i - 1, ASSET_COLOR[prevAsset] ?? '#818cf8')
+      const prev = dateAssetMap[pts[i - 1]?.date] ?? 'usd'
+      const cur  = i < pts.length ? (dateAssetMap[pts[i]?.date] ?? 'usd') : null
+      if (cur !== prev || i === pts.length) {
+        drawSeg(segStart, i - 1, ASSET_COLOR[prev] ?? '#8b5cf6')
         segStart = i - 1
       }
     }
@@ -153,92 +120,26 @@ function EquityCanvas({ history, transitions }) {
       const idx = dateToIdx[t.date]
       if (idx == null || eqNorm[idx] == null) return
       const color = ASSET_COLOR[assetKey(t.asset)] ?? '#fff'
-      ctx.beginPath()
-      ctx.arc(eX(idx), eY(eqNorm[idx]), 4, 0, Math.PI * 2)
-      ctx.fillStyle = color
-      ctx.fill()
-      ctx.strokeStyle = '#0f172a'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
+      ctx.beginPath(); ctx.arc(eX(idx), eY(eqNorm[idx]), 4, 0, Math.PI * 2)
+      ctx.fillStyle = color; ctx.fill()
+      ctx.strokeStyle = '#f9fafb'; ctx.lineWidth = 1.5; ctx.stroke()
     })
 
-    // Final value label
+    // Final label
     const lastEq = eqNorm[eqNorm.length - 1]
-    const lastX  = eX(pts.length - 1)
-    const lastY  = eY(lastEq)
-    ctx.font = 'bold 11px monospace'
-    ctx.textAlign = 'right'
-    ctx.fillStyle = '#e2e8f0'
-    ctx.fillText(fmtMultiple(lastEq), W - 4, lastY - 6)
+    ctx.font = 'bold 10px -apple-system,sans-serif'; ctx.textAlign = 'left'
+    ctx.fillStyle = '#374151'
+    ctx.fillText((lastEq ?? 0).toFixed(3) + 'x', pad.l + cw + 4, eY(lastEq) - 4)
 
-    // X-axis dates
-    ctx.font = '9px monospace'
-    ctx.fillStyle = '#4b5563'
-    ctx.textAlign = 'center'
-    const dateStep = Math.max(1, Math.floor(pts.length / 6))
-    for (let i = 0; i < pts.length; i += dateStep) {
-      const d = pts[i].date?.slice(0, 7) ?? ''
-      ctx.fillText(d, eX(i), H - 6)
+    // X dates
+    ctx.font = '9px -apple-system,sans-serif'; ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'
+    const step = Math.max(1, Math.floor(pts.length / 6))
+    for (let i = 0; i < pts.length; i += step) {
+      ctx.fillText(pts[i].date?.slice(0, 7) ?? '', eX(i), H - 6)
     }
-
   }, [history, transitions])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: '100%', height: '180px', display: 'block', borderRadius: '6px' }}
-    />
-  )
-}
-
-// ─── Scores table ─────────────────────────────────────────────────────────────
-function ScoresTable({ scores }) {
-  if (!scores) return (
-    <div className="text-gray-500 text-xs font-mono text-center py-4">
-      No score data yet — waiting for first webhook
-    </div>
-  )
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-xs font-mono border-collapse">
-        <thead>
-          <tr>
-            <th className="px-2 py-1 text-gray-500 text-left"></th>
-            {ASSETS.filter(a => a.key !== 'usd').map(a => (
-              <th key={a.key} className="px-2 py-1 text-center" style={{ color: a.color }}>
-                {a.label}
-              </th>
-            ))}
-            <th className="px-2 py-1 text-center text-gray-400">USD</th>
-            <th className="px-2 py-1 text-center text-gray-300 border-l border-gray-700">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {ASSETS.map(asset => (
-            <tr key={asset.key} className="border-t border-gray-800">
-              <td className="px-2 py-1 font-bold" style={{ color: asset.color }}>
-                {asset.label}
-              </td>
-              {ASSETS.filter(a => a.key !== 'usd').map(col => {
-                if (col.key === asset.key) {
-                  return <td key={col.key} className="px-2 py-1 text-center bg-gray-800/60">—</td>
-                }
-                return (
-                  <td key={col.key} className="px-2 py-1 text-center text-gray-400">·</td>
-                )
-              })}
-              <td className="px-2 py-1 text-center text-gray-400">·</td>
-              <td className="px-2 py-1 text-center font-bold border-l border-gray-700"
-                style={{ color: asset.color }}>
-                {scores[asset.key] ?? '—'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
+  return <canvas ref={canvasRef} style={{ width: '100%', height: 180, display: 'block', borderRadius: 6 }} />
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -246,15 +147,11 @@ export default function RotationChart() {
   const [data, setData] = useState(null)
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res  = await fetch('/api/signals?history=true')
-        const json = await res.json()
-        setData(json)
-      } catch {}
+    const fetch_ = async () => {
+      try { setData(await (await fetch('/api/signals?history=true')).json()) } catch {}
     }
-    fetchData()
-    const iv = setInterval(fetchData, 60_000)
+    fetch_()
+    const iv = setInterval(fetch_, 60_000)
     return () => clearInterval(iv)
   }, [])
 
@@ -262,113 +159,97 @@ export default function RotationChart() {
   const history     = data?.history?.rotation || []
   const transitions = data?.rotationTransitions || []
   const scores      = rotation?.scores
+  const currentKey  = assetKey(rotation?.asset)
+  const assetColor  = ASSET_COLOR[currentKey] ?? '#9ca3af'
+  const assetLabel  = ASSET_LABEL[currentKey] ?? rotation?.asset ?? 'USD'
 
-  const currentAsset = assetKey(rotation?.asset)
-  const assetColor   = ASSET_COLOR[currentAsset] ?? '#9ca3af'
-  const assetLabel   = ASSET_LABEL[currentAsset] ?? rotation?.asset ?? '—'
-
-  // Sort assets by score descending for display
   const sortedAssets = scores
     ? [...ASSETS].sort((a, b) => (scores[b.key] ?? 0) - (scores[a.key] ?? 0))
     : ASSETS
 
-  const LBL = { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }
-  const BASE = { fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#fff' }
-
   return (
-    <div style={{ borderTop: '1px solid #1a1a1a' }}>
-
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #1a1a1a' }}>
-        {/* Title row */}
+      <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #f3f4f6' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ ...BASE, fontSize: 14 }}>
-            ASSET ROTATION <span style={{ color: '#f7931a' }}>SYSTEM 1</span>
-          </span>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+            Asset Rotation <span style={{ color: '#f97316' }}>System 1</span>
+          </div>
           {rotation?.updated_at && (
-            <span style={{ ...LBL, letterSpacing: 0 }}>
+            <span style={{ ...LABEL, textTransform: 'none', letterSpacing: 0 }}>
               {new Date(rotation.updated_at).toUTCString().slice(0, 16)}
             </span>
           )}
         </div>
-        {/* Dominant asset */}
+
+        {/* Dominant asset pill */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <span style={{ ...LBL }}>DOMINANT ASSET</span>
+          <span style={LABEL}>Dominant asset</span>
           <span style={{
-            fontFamily: 'monospace', fontSize: 16, fontWeight: 700,
-            padding: '3px 12px', borderRadius: 4,
-            background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
-          }}>
-            {assetLabel}
-          </span>
+            fontSize: 14, fontWeight: 700, padding: '3px 12px', borderRadius: 20,
+            background: assetColor + '18', color: assetColor, border: `1px solid ${assetColor}40`,
+          }}>{assetLabel}</span>
         </div>
-        {/* Color legend */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+
+        {/* Asset legend */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
           {ASSETS.map(a => (
-            <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{
                 width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
-                boxShadow: a.key === currentAsset ? `0 0 6px ${a.color}` : 'none',
-                opacity: a.key === currentAsset ? 1 : 0.4
+                opacity: a.key === currentKey ? 1 : 0.35,
               }} />
               <span style={{
-                fontFamily: 'monospace', fontSize: 12,
-                color: a.key === currentAsset ? a.color : '#555',
-                fontWeight: a.key === currentAsset ? 700 : 400
-              }}>
-                {a.label}
-              </span>
+                fontSize: 11, fontFamily: 'inherit',
+                color: a.key === currentKey ? a.color : '#9ca3af',
+                fontWeight: a.key === currentKey ? 700 : 400,
+              }}>{a.label}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* Equity curve */}
-      <div style={{ padding: '12px 16px 8px' }}>
-        <div style={{ ...LBL, marginBottom: 6 }}>ROTATION EQUITY · dots = asset changes</div>
+      <div style={{ padding: '1rem 1.25rem .75rem' }}>
+        <div style={{ ...LABEL, marginBottom: 8 }}>Rotation equity · dots = asset changes</div>
         {history.length > 1 && transitions.length > 0 ? (
           <EquityCanvas history={history} transitions={transitions} />
         ) : (
-          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '1px solid #1a1a1a', borderRadius: 6, color: '#444', fontFamily: 'monospace', fontSize: 13 }}>
-            Equity curve builds after first webhook fires
+          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+            <span style={{ ...LABEL, color: '#d1d5db' }}>Equity curve builds after first webhook</span>
           </div>
         )}
       </div>
 
       {/* Score bars */}
       {scores && (
-        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #1a1a1a' }}>
-          <div style={{ ...LBL, marginBottom: 8 }}>RELATIVE STRENGTH SCORES (0–6)</div>
+        <div style={{ padding: '.75rem 1.25rem 1rem', borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ ...LABEL, marginBottom: 10 }}>Relative strength (0–6)</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sortedAssets.map(asset => {
-              const score = scores[asset.key] ?? 0
-              const isActive = asset.key === currentAsset
+              const score    = scores[asset.key] ?? 0
+              const isActive = asset.key === currentKey
               return (
                 <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, width: 34, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#9ca3af' }}>
                     {asset.label}
                   </span>
-                  <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 9999, overflow: 'hidden' }}>
+                  <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
                     <div style={{
                       width: `${(score / 6) * 100}%`, height: '100%', background: asset.color,
-                      opacity: isActive ? 1 : 0.4, borderRadius: 9999,
-                      boxShadow: isActive ? `0 0 6px ${asset.color}88` : 'none',
-                      transition: 'width 0.5s'
+                      opacity: isActive ? 1 : 0.35, borderRadius: 9999, transition: 'width .5s',
                     }} />
                   </div>
-                  <span style={{ fontFamily: 'monospace', fontSize: 14, fontWeight: 700, width: 16, textAlign: 'right', flexShrink: 0,
-                    color: isActive ? asset.color : '#444' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, width: 14, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#d1d5db' }}>
                     {score}
                   </span>
-                  {isActive && <span style={{ fontFamily: 'monospace', fontSize: 13, color: asset.color, flexShrink: 0 }}>←</span>}
+                  {isActive && <span style={{ fontSize: 11, color: asset.color, flexShrink: 0 }}>←</span>}
                 </div>
               )
             })}
           </div>
         </div>
       )}
-
     </div>
   )
 }
