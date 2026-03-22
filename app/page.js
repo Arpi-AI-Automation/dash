@@ -23,18 +23,11 @@ const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { s
 export const dynamic_ = 'force-dynamic'
 export const revalidate = 0
 
-// ── Design tokens matching Perfect Travel Dashboard ──────────────────────────
 const card = {
-  background: '#ffffff',
-  border: '1px solid #d1d5db',
-  borderRadius: 12,
-  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)',
-  marginBottom: 0,
+  background: '#ffffff', border: '1px solid #d1d5db', borderRadius: 12,
+  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.08)', marginBottom: 0,
 }
-
-const cardPad = { ...card, padding: '1.25rem' }
-
-// Coloured left-border variants (like PT Dashboard card accents)
+const cardPad    = { ...card, padding: '1.25rem' }
 const cardBlue   = { ...cardPad, borderLeft: '4px solid #3b82f6' }
 const cardGreen  = { ...cardPad, borderLeft: '4px solid #10b981' }
 const cardYellow = { ...cardPad, borderLeft: '4px solid #f59e0b' }
@@ -51,59 +44,40 @@ const LABEL = {
 
 export default function Home() {
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#f3f4f6',
-      fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
-    }}>
-      {/* ── Sticky header ──────────────────────────────────────────────────── */}
-      <header style={{
-        background: '#ffffff', borderBottom: '1px solid #d1d5db',
-        padding: '.875rem 1.5rem', position: 'sticky', top: 0, zIndex: 100,
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-      }}>
-        <h1 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827', margin: 0 }}>
-          Shredder OS
-        </h1>
+    <div style={{ minHeight: '100vh', background: '#f3f4f6', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif' }}>
+
+      <header style={{ background: '#ffffff', borderBottom: '1px solid #d1d5db', padding: '.875rem 1.5rem', position: 'sticky', top: 0, zIndex: 100, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#111827', margin: 0 }}>Shredder OS</h1>
         <span style={{ fontSize: '.78rem', color: '#9ca3af' }}>BTC Strategy Dashboard · UTC</span>
       </header>
 
-      {/* ── Main content ───────────────────────────────────────────────────── */}
       <main style={{ padding: '1.5rem', maxWidth: 1400, margin: '0 auto' }}>
 
-        {/* ROW 1 — Executive Summary (left 30%) + BTC Chart (right 70%) */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '30fr 70fr',
-          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
-        }}>
+        {/* ROW 1 — Executive Summary + BTC Chart */}
+        <div style={{ display: 'grid', gridTemplateColumns: '30fr 70fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardBlue}>
             <span style={LABEL}>Executive Summary</span>
             <DailyBrief />
           </div>
-
           <TvSignalChart />
         </div>
 
         {/* ROW 2 — Rotation S1 + S2 */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <RotationChart />
           <RotationChart2 />
         </div>
 
-        {/* ROW 3 — AI Hedge Portfolio (full width) */}
+        {/* ROW 3 — AI Hedge Portfolio — NO extra label, component owns its header */}
         <div style={{ ...cardYellow, marginBottom: '1.25rem' }}>
-          <span style={LABEL}>AI Hedge Portfolio</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: '1rem' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>AI Hedge Portfolio</span>
+          </div>
           <AiHedgePortfolio />
         </div>
 
-        {/* ROW 4 — Valuation oscillators + Funding Rate */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
-        }}>
+        {/* ROW 4 — Valuation + Funding */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardGreen}>
             <span style={LABEL}>Valuation Index</span>
             <ValuationIndex />
@@ -115,10 +89,7 @@ export default function Home() {
         </div>
 
         {/* ROW 5 — Fear & Greed + TPI Gauge */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardPad}>
             <span style={LABEL}>Fear & Greed</span>
             <FearGreed />
@@ -126,22 +97,19 @@ export default function Home() {
           <TvSignalGauge />
         </div>
 
-        {/* ROW 6 — Futures OI vs Price (full width) */}
+        {/* ROW 6 — OI Scatter */}
         <div style={{ ...cardPurple, marginBottom: '1.25rem' }}>
           <OIScatter />
         </div>
 
-        {/* ROW 7 — VS BTC comparison (full width) */}
+        {/* ROW 7 — VS BTC */}
         <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
           <span style={LABEL}>vs BTC — Asset outperformance</span>
           <BtcComparison />
         </div>
 
         {/* ROW 8 — Checklist + Verdict */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start',
-        }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardBlue}>
             <span style={LABEL}>Decision Checklist</span>
             <DecisionChecklist />
