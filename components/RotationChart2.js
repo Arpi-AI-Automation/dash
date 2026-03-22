@@ -1,8 +1,6 @@
 'use client'
-
 import { useEffect, useRef, useState } from 'react'
 
-// ─── Asset config (same as System 1) ──────────────────────────────────────────
 const ASSETS = [
   { key: 'bnb',  label: 'BNB',  color: '#f3ba2f' },
   { key: 'eth',  label: 'ETH',  color: '#627eea' },
@@ -13,7 +11,6 @@ const ASSETS = [
   { key: 'btc',  label: 'BTC',  color: '#f7931a' },
   { key: 'usd',  label: 'USD',  color: '#6b7280' },
 ]
-
 const ASSET_COLOR = Object.fromEntries(ASSETS.map(a => [a.key, a.color]))
 const ASSET_LABEL = Object.fromEntries(ASSETS.map(a => [a.key, a.label]))
 
@@ -30,27 +27,24 @@ function assetKey(tvAsset) {
   return 'usd'
 }
 
-const fmtMultiple = v => v != null ? v.toFixed(3) + 'x' : '—'
+const LABEL = {
+  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+  fontSize: 11, fontWeight: 600, color: '#6b7280',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
+}
 
-// ─── Equity canvas ────────────────────────────────────────────────────────────
-// Simulates holding the signalled asset each day vs buy & hold BTC.
-// Uses CoinGecko daily prices stored in s2:daily entries (injected server-side).
-// If no .equity on entries yet, falls back to flat 1.0 line until prices arrive.
 function EquityCanvas({ history, transitions }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
     if (!canvasRef.current || !history?.length) return
     const canvas = canvasRef.current
-    const ctx    = canvas.getContext('2d')
-    const dpr    = window.devicePixelRatio || 1
-    const W      = canvas.clientWidth
-    const H      = canvas.clientHeight
-    canvas.width  = W * dpr
-    canvas.height = H * dpr
+    const ctx = canvas.getContext('2d')
+    const dpr = window.devicePixelRatio || 1
+    const W = canvas.clientWidth, H = canvas.clientHeight
+    canvas.width = W * dpr; canvas.height = H * dpr
     ctx.scale(dpr, dpr)
 
-    // Deduplicate: one entry per calendar day
     const dayMap = {}
     history.forEach(p => {
       if (!p.date) return
@@ -59,69 +53,45 @@ function EquityCanvas({ history, transitions }) {
     const pts = Object.keys(dayMap).sort().map(d => dayMap[d])
     if (pts.length < 2) return
 
-    // Build dateAssetMap from transitions
     const sortedT = [...transitions].sort((a, b) => a.date.localeCompare(b.date))
     const dateAssetMap = {}
     for (let i = 0; i < sortedT.length; i++) {
-      const tDate    = sortedT[i].date
-      const tAsset   = assetKey(sortedT[i].asset)
+      const tDate  = sortedT[i].date
+      const tAsset = assetKey(sortedT[i].asset)
       const nextDate = sortedT[i + 1]?.date ?? '9999-12-31'
-      pts.forEach(p => {
-        if (p.date >= tDate && p.date < nextDate) dateAssetMap[p.date] = tAsset
-      })
+      pts.forEach(p => { if (p.date >= tDate && p.date < nextDate) dateAssetMap[p.date] = tAsset })
     }
-
     const dateToIdx = {}
     pts.forEach((p, i) => { dateToIdx[p.date] = i })
 
-    // Equity curve — use .equity if pre-computed, else flat
     const eqNorm = pts.map(p => p.equity ?? null)
-    if (eqNorm.every(v => v === null)) {
-      // No pre-computed equity yet — just show flat line at 1.0
-      eqNorm.fill(1.0)
-    } else {
-      // Forward-fill any gaps
-      for (let i = 1; i < eqNorm.length; i++) {
-        if (eqNorm[i] === null) eqNorm[i] = eqNorm[i - 1] ?? 1.0
-      }
-    }
+    if (eqNorm.every(v => v === null)) eqNorm.fill(1.0)
+    else for (let i = 1; i < eqNorm.length; i++) { if (eqNorm[i] === null) eqNorm[i] = eqNorm[i - 1] ?? 1.0 }
 
-    // ── Layout ────────────────────────────────────────────────────────────────
-    const pad = { t: 12, r: 56, b: 28, l: 16 }
-    const cw  = W - pad.l - pad.r
-    const ch  = H - pad.t - pad.b
-
+    const pad = { t: 12, r: 56, b: 28, l: 48 }
+    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b
     ctx.clearRect(0, 0, W, H)
-    ctx.fillStyle = '#0f172a'
-    ctx.fillRect(0, 0, W, H)
+    ctx.fillStyle = '#f9fafb'; ctx.fillRect(pad.l, pad.t, cw, ch)
 
     const eqValid = eqNorm.filter(Boolean)
-    const minEq   = Math.min(...eqValid) * 0.97
-    const maxEq   = Math.max(...eqValid) * 1.03
+    const minEq = Math.min(...eqValid) * 0.97, maxEq = Math.max(...eqValid) * 1.03
     const rangeEq = maxEq - minEq || 1
-
     const eX = i => pad.l + (cw * i) / (pts.length - 1)
     const eY = v => pad.t + ch - (ch * (v - minEq)) / rangeEq
 
-    // Grid
-    ctx.font = '9px monospace'
-    ctx.textAlign = 'right'
+    ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'right'
     for (let i = 0; i <= 3; i++) {
       const v = minEq + (rangeEq * i) / 3
       const y = pad.t + ch - (ch * i) / 3
-      ctx.strokeStyle = '#1f2937'; ctx.lineWidth = 0.5
+      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5
       ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
-      ctx.fillStyle = '#6b7280'
-      ctx.fillText(v.toFixed(2) + 'x', W - 4, y + 3)
+      ctx.fillStyle = '#9ca3af'; ctx.fillText(v.toFixed(2) + 'x', pad.l - 4, y + 3)
     }
 
-    // Baseline
-    const baseY = eY(1.0)
-    ctx.strokeStyle = '#374151'; ctx.lineWidth = 0.8; ctx.setLineDash([4, 4])
-    ctx.beginPath(); ctx.moveTo(pad.l, baseY); ctx.lineTo(pad.l + cw, baseY); ctx.stroke()
+    ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 0.8; ctx.setLineDash([4, 4])
+    ctx.beginPath(); ctx.moveTo(pad.l, eY(1.0)); ctx.lineTo(pad.l + cw, eY(1.0)); ctx.stroke()
     ctx.setLineDash([])
 
-    // Coloured segments by asset
     let segStart = 0
     const drawSeg = (from, to, color) => {
       if (to <= from) return
@@ -131,58 +101,44 @@ function EquityCanvas({ history, transitions }) {
       ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke()
     }
     for (let i = 1; i <= pts.length; i++) {
-      const prevAsset = dateAssetMap[pts[i - 1]?.date] ?? 'usd'
-      const curAsset  = i < pts.length ? (dateAssetMap[pts[i]?.date] ?? 'usd') : null
-      if (curAsset !== prevAsset || i === pts.length) {
-        drawSeg(segStart, i - 1, ASSET_COLOR[prevAsset] ?? '#818cf8')
+      const prev = dateAssetMap[pts[i - 1]?.date] ?? 'usd'
+      const cur  = i < pts.length ? (dateAssetMap[pts[i]?.date] ?? 'usd') : null
+      if (cur !== prev || i === pts.length) {
+        drawSeg(segStart, i - 1, ASSET_COLOR[prev] ?? '#8b5cf6')
         segStart = i - 1
       }
     }
 
-    // Transition dots
     sortedT.slice(1).forEach(t => {
       const idx = dateToIdx[t.date]
       if (idx == null || eqNorm[idx] == null) return
       const color = ASSET_COLOR[assetKey(t.asset)] ?? '#fff'
       ctx.beginPath(); ctx.arc(eX(idx), eY(eqNorm[idx]), 4, 0, Math.PI * 2)
       ctx.fillStyle = color; ctx.fill()
-      ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.5; ctx.stroke()
+      ctx.strokeStyle = '#f9fafb'; ctx.lineWidth = 1.5; ctx.stroke()
     })
 
-    // Final value label
     const lastEq = eqNorm[eqNorm.length - 1]
-    ctx.font = 'bold 11px monospace'; ctx.textAlign = 'right'
-    ctx.fillStyle = '#e2e8f0'
-    ctx.fillText(fmtMultiple(lastEq), W - 4, eY(lastEq) - 6)
+    ctx.font = 'bold 10px -apple-system,sans-serif'; ctx.textAlign = 'left'
+    ctx.fillStyle = '#374151'
+    ctx.fillText((lastEq ?? 0).toFixed(3) + 'x', pad.l + cw + 4, eY(lastEq) - 4)
 
-    // X-axis dates
-    ctx.font = '9px monospace'; ctx.fillStyle = '#4b5563'; ctx.textAlign = 'center'
+    ctx.font = '9px -apple-system,sans-serif'; ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'
     const step = Math.max(1, Math.floor(pts.length / 6))
     for (let i = 0; i < pts.length; i += step) {
       ctx.fillText(pts[i].date?.slice(0, 7) ?? '', eX(i), H - 6)
     }
-
   }, [history, transitions])
 
-  return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: '100%', height: '180px', display: 'block', borderRadius: '6px' }}
-    />
-  )
+  return <canvas ref={canvasRef} style={{ width: '100%', height: 180, display: 'block', borderRadius: 6 }} />
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
 export default function RotationChart2() {
   const [data, setData] = useState(null)
 
   useEffect(() => {
     const load = async () => {
-      try {
-        const res  = await fetch('/api/signals?history=true')
-        const json = await res.json()
-        setData(json)
-      } catch {}
+      try { setData(await (await fetch('/api/signals?history=true')).json()) } catch {}
     }
     load()
     const iv = setInterval(load, 60_000)
@@ -194,34 +150,26 @@ export default function RotationChart2() {
   const transitions = data?.s2Transitions || []
   const scores      = s2?.scores
   const alloc       = s2?.alloc
+  const currentKey  = assetKey(s2?.asset)
 
-  const currentAsset = assetKey(s2?.asset)
-  const assetColor   = ASSET_COLOR[currentAsset] ?? '#9ca3af'
-  const assetLabel   = ASSET_LABEL[currentAsset] ?? s2?.asset ?? '—'
-
-  // Sort by score desc if available, else by alloc desc
   const sortedAssets = (scores || alloc)
     ? [...ASSETS].sort((a, b) => {
-        const aVal = scores ? (scores[a.key] ?? 0) : (alloc?.[a.key] ?? 0)
-        const bVal = scores ? (scores[b.key] ?? 0) : (alloc?.[b.key] ?? 0)
-        return bVal - aVal
+        const aV = scores ? (scores[a.key] ?? 0) : (alloc?.[a.key] ?? 0)
+        const bV = scores ? (scores[b.key] ?? 0) : (alloc?.[b.key] ?? 0)
+        return bV - aV
       })
     : ASSETS
 
-  const LBL = { fontFamily: 'monospace', fontSize: 11, fontWeight: 400, color: '#555', letterSpacing: '0.08em', textTransform: 'uppercase' }
-  const BASE = { fontFamily: 'monospace', fontSize: 18, fontWeight: 700, color: '#fff' }
-
   return (
-    <div style={{ borderTop: '1px solid #1a1a1a' }}>
-
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)', overflow: 'hidden' }}>
       {/* Header */}
-      <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid #1a1a1a' }}>
+      <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #f3f4f6' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ ...BASE, fontSize: 14 }}>
-            ASSET ROTATION <span style={{ color: '#818cf8' }}>SYSTEM 2</span>
-          </span>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+            Asset Rotation <span style={{ color: '#8b5cf6' }}>System 2</span>
+          </div>
           {s2?.updated_at && (
-            <span style={{ ...LBL, letterSpacing: 0 }}>
+            <span style={{ ...LABEL, textTransform: 'none', letterSpacing: 0 }}>
               {new Date(s2.updated_at).toUTCString().slice(0, 16)}
             </span>
           )}
@@ -229,44 +177,40 @@ export default function RotationChart2() {
 
         {/* Current signal */}
         <div style={{ marginBottom: 10 }}>
-          <span style={{ ...LBL }}>CURRENT SIGNAL</span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <div style={{ ...LABEL, marginBottom: 6 }}>Current signal</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {!s2 ? (
-              <span style={{ fontFamily: 'monospace', fontSize: 13, color: '#444' }}>awaiting first webhook</span>
+              <span style={{ ...LABEL, color: '#d1d5db', textTransform: 'none' }}>awaiting first webhook</span>
             ) : alloc ? (
               ASSETS.filter(a => (alloc[a.key] ?? 0) > 0).map(a => (
                 <span key={a.key} style={{
-                  fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
-                  padding: '3px 12px', borderRadius: 4,
-                  background: a.color + '22', color: a.color, border: `1px solid ${a.color}55`
+                  fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 20,
+                  background: a.color + '18', color: a.color, border: `1px solid ${a.color}40`,
                 }}>
-                  {a.label} <span style={{ fontSize: 12, opacity: 0.8 }}>{alloc[a.key]}%</span>
+                  {a.label} <span style={{ fontSize: 11, opacity: .8 }}>{alloc[a.key]}%</span>
                 </span>
               ))
             ) : (
               <span style={{
-                fontFamily: 'monospace', fontSize: 15, fontWeight: 700,
-                padding: '3px 12px', borderRadius: 4,
-                background: assetColor + '22', color: assetColor, border: `1px solid ${assetColor}55`
+                fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 20,
+                background: (ASSET_COLOR[currentKey] ?? '#9ca3af') + '18',
+                color: ASSET_COLOR[currentKey] ?? '#9ca3af',
+                border: `1px solid ${(ASSET_COLOR[currentKey] ?? '#9ca3af')}40`,
               }}>
-                {assetLabel}
+                {ASSET_LABEL[currentKey] ?? s2?.asset ?? '—'}
               </span>
             )}
           </div>
         </div>
 
-        {/* Asset legend */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 14px' }}>
+        {/* Legend */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
           {ASSETS.map(a => {
-            const isActive = alloc ? (alloc[a.key] ?? 0) > 0 : a.key === currentAsset
+            const isActive = alloc ? (alloc[a.key] ?? 0) > 0 : a.key === currentKey
             return (
-              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block',
-                  boxShadow: isActive ? `0 0 6px ${a.color}` : 'none', opacity: isActive ? 1 : 0.4 }} />
-                <span style={{ fontFamily: 'monospace', fontSize: 12,
-                  color: isActive ? a.color : '#555', fontWeight: isActive ? 700 : 400 }}>
-                  {a.label}
-                </span>
+              <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block', opacity: isActive ? 1 : 0.35 }} />
+                <span style={{ fontSize: 11, color: isActive ? a.color : '#9ca3af', fontWeight: isActive ? 700 : 400 }}>{a.label}</span>
               </div>
             )
           })}
@@ -274,50 +218,45 @@ export default function RotationChart2() {
       </div>
 
       {/* Equity curve */}
-      <div style={{ padding: '12px 16px 8px' }}>
-        <div style={{ ...LBL, marginBottom: 6 }}>ROTATION EQUITY · dots = asset changes</div>
+      <div style={{ padding: '1rem 1.25rem .75rem' }}>
+        <div style={{ ...LABEL, marginBottom: 8 }}>Rotation equity · dots = asset changes</div>
         {history.length > 1 && transitions.length > 0 ? (
           <EquityCanvas history={history} transitions={transitions} />
         ) : (
-          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '1px solid #1a1a1a', borderRadius: 6, color: '#444', fontFamily: 'monospace', fontSize: 13 }}>
-            Equity curve builds after first webhook fires
+          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+            <span style={{ ...LABEL, color: '#d1d5db' }}>Equity curve builds after first webhook</span>
           </div>
         )}
       </div>
 
       {/* Score bars */}
       {scores && (
-        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #1a1a1a' }}>
-          <div style={{ ...LBL, marginBottom: 8 }}>RELATIVE STRENGTH SCORES</div>
+        <div style={{ padding: '.75rem 1.25rem 1rem', borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ ...LABEL, marginBottom: 10 }}>Relative strength scores</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sortedAssets.map(asset => {
-              const score = scores[asset.key] ?? 0
-              const maxAbs = Math.max(...Object.values(scores).map(Math.abs), 1)
-              const isActive = asset.key === currentAsset
-              const barPct = Math.abs(score) / maxAbs * 100
+              const score    = scores[asset.key] ?? 0
+              const maxAbs   = Math.max(...Object.values(scores).map(Math.abs), 1)
+              const isActive = asset.key === currentKey
+              const barPct   = (Math.abs(score) / maxAbs) * 100
+              const barColor = score < 0 ? '#ef4444' : asset.color
               return (
                 <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, width: 34, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#9ca3af' }}>
                     {asset.label}
                   </span>
-                  <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 9999, overflow: 'hidden' }}>
-                    <div style={{ width: `${barPct}%`, height: '100%', borderRadius: 9999, transition: 'width 0.5s',
-                      background: score < 0 ? '#ef4444' : asset.color,
-                      opacity: isActive ? 1 : 0.4,
-                      boxShadow: isActive ? `0 0 6px ${asset.color}88` : 'none' }} />
+                  <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
+                    <div style={{ width: `${barPct}%`, height: '100%', background: barColor, opacity: isActive ? 1 : 0.35, borderRadius: 9999, transition: 'width .5s' }} />
                   </div>
-                  <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 28, textAlign: 'right', flexShrink: 0,
-                    color: isActive ? asset.color : '#444' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, width: 28, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#d1d5db' }}>
                     {score > 0 ? '+' : ''}{score}
                   </span>
                   {alloc && (
-                    <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0,
-                      color: (alloc[asset.key] ?? 0) > 0 ? asset.color : '#333' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, width: 32, textAlign: 'right', flexShrink: 0, color: (alloc[asset.key] ?? 0) > 0 ? asset.color : '#d1d5db' }}>
                       {alloc[asset.key] ?? 0}%
                     </span>
                   )}
-                  {isActive && <span style={{ fontFamily: 'monospace', fontSize: 13, color: asset.color, flexShrink: 0 }}>←</span>}
+                  {isActive && <span style={{ fontSize: 11, color: asset.color, flexShrink: 0 }}>←</span>}
                 </div>
               )
             })}
@@ -325,28 +264,23 @@ export default function RotationChart2() {
         </div>
       )}
 
-      {/* Allocation only (no scores) */}
+      {/* Alloc only (no scores) */}
       {!scores && alloc && (
-        <div style={{ padding: '10px 16px 14px', borderTop: '1px solid #1a1a1a' }}>
-          <div style={{ ...LBL, marginBottom: 8 }}>ALLOCATION</div>
+        <div style={{ padding: '.75rem 1.25rem 1rem', borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ ...LABEL, marginBottom: 10 }}>Allocation</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {sortedAssets.filter(a => (alloc[a.key] ?? 0) > 0).map(asset => (
               <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
-                  {asset.label}
-                </span>
-                <div style={{ flex: 1, height: 4, background: '#1a1a1a', borderRadius: 9999, overflow: 'hidden' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, width: 34, textAlign: 'right', flexShrink: 0, color: asset.color }}>{asset.label}</span>
+                <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
                   <div style={{ width: `${alloc[asset.key]}%`, height: '100%', background: asset.color, borderRadius: 9999 }} />
                 </div>
-                <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, width: 36, textAlign: 'right', flexShrink: 0, color: asset.color }}>
-                  {alloc[asset.key]}%
-                </span>
+                <span style={{ fontSize: 11, fontWeight: 700, width: 32, textAlign: 'right', flexShrink: 0, color: asset.color }}>{alloc[asset.key]}%</span>
               </div>
             ))}
           </div>
         </div>
       )}
-
     </div>
   )
 }
