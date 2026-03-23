@@ -342,16 +342,14 @@ function PctFromHighDisplay({ v }) {
 
 // ── Column grid ───────────────────────────────────────────────────────────────
 // Added Verdict column at the end; removed right-side T1VerdictPanel
-const COLS = '0.5fr 1.2fr 0.9fr 0.7fr 0.8fr 0.7fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr 0.85fr 1.5fr 0.8fr'
+const COLS = '0.5fr 1.2fr 0.9fr 0.8fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr 0.85fr 1.5fr 0.8fr 0.7fr'
 
 function HeaderRow() {
   const cols = [
     { label: 'Ticker',   align: 'left'   },
     { label: 'Fund',     align: 'left'   },
     { label: 'Price',    align: 'right'  },
-    { label: '30D',      align: 'right'  },
     { label: 'vs QQQ 30D', align: 'right', tip: '30D return vs QQQ (outperformance)' },
-    { label: '52W DD%',  align: 'right',  tip: '% below 52-week high (Yahoo 1-year high, not true ATH).' },
     { label: 'Vol',      align: 'right'  },
     { label: 'TPI 1',    align: 'center', tip: 'T1: EMA(12) ≥ EMA(21) → Positive. EMA(12) < EMA(21) → Negative.' },
     { label: 'TPI 2',    align: 'center', tip: 'T2: Aroon(34). Up > Down → Positive momentum. Up < Down → Negative.' },
@@ -359,7 +357,8 @@ function HeaderRow() {
     { label: 'ADX',       align: 'center', tip: 'ADX(14) — trend strength. >40 strong, 25-40 developing, <20 no trend. Direction from TPI 1/2.' },
     { label: 'vs 52W Hi', align: 'center', tip: '% below 52-week high. 0% = at annual peak. Red = >15% below peak.' },
     { label: 'Verdict',  align: 'center', tip: '🚀 Ripping: T1+T2 positive, RSI>55, EMA dev>0, DD>-5% | Positive Trend: T1+T2 both positive | Neutral: mixed | Negative Trend: T1+T2 both negative | 💀 Cooked: T1+T2 negative, RSI<45, EMA dev<-5%, DD<-20%' },
-    { label: '30D',      align: 'center', tip: '30-day price sparkline. Green = up, red = down.' },
+    { label: 'Spark',    align: 'center', tip: '30-day price chart. Green = up 30D, red = down 30D.' },
+    { label: '30D',      align: 'right',  tip: '30-day % return.' },
   ]
   return (
     <div style={{ display: 'grid', gridTemplateColumns: COLS, padding: '0 16px 8px', gap: 6, borderBottom: '1px solid #e5e7eb' }}>
@@ -385,11 +384,10 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
   if (!d) return (
     <div style={rowStyle}>
       <span style={{ fontSize: 14, fontWeight: 800, color: meta?.color ?? '#9ca3af' }}>{symbol}</span>
-      {Array(13).fill(0).map((_, i) => <span key={i} style={{ color: '#d1d5db' }}>—</span>)}
+      {Array(12).fill(0).map((_, i) => <span key={i} style={{ color: '#d1d5db' }}>—</span>)}
     </div>
   )
 
-  const ddColor  = d.drawdown == null ? '#9ca3af' : d.drawdown > -5 ? '#6b7280' : d.drawdown > -15 ? '#f59e0b' : '#dc2626'
   const volColor = !d.volRatio ? '#9ca3af' : d.volRatio >= 1.5 ? '#f59e0b' : d.volRatio >= 1.2 ? '#6b7280' : '#9ca3af'
 
   return (
@@ -397,13 +395,7 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
       <div style={{ fontSize: 14, fontWeight: 800, color: d.color }}>{symbol}</div>
       <div style={{ fontSize: 11, fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>US${d.price?.toFixed(2)}</div>
-      <div style={{ textAlign: 'right' }}><Pct v={d.change30d} /></div>
       <div style={{ textAlign: 'right' }}><Pct v={d.vsQQQ} /></div>
-      <div style={{ textAlign: 'right' }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: ddColor, fontVariantNumeric: 'tabular-nums' }}>
-          {d.drawdown != null ? `${d.drawdown.toFixed(1)}%` : '—'}
-        </span>
-      </div>
       <div style={{ textAlign: 'right' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: volColor }}>{d.volRatio != null ? `${d.volRatio.toFixed(1)}x` : '—'}</span>
       </div>
@@ -426,13 +418,14 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
         <VerdictPill verdict={verdict} />
       </div>
 
-      {/* Sparkline — green if 30D up, red if down */}
+      {/* Sparkline then 30D — grouped together */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         <Sparkline
           data={d.spark}
           color={d.change30d == null ? '#9ca3af' : d.change30d > 0 ? '#10b981' : '#ef4444'}
         />
       </div>
+      <div style={{ textAlign: 'right' }}><Pct v={d.change30d} /></div>
     </div>
   )
 }
