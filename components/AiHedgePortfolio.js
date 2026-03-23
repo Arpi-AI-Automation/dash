@@ -94,21 +94,48 @@ function calcRSISmoothed(prices, rsiPeriod = 7, emaPeriod = 14) {
   return parseFloat(ema.toFixed(1))
 }
 
-function calcSharpe(prices, riskFreeDaily = 0.00014) {
-  if (!prices || prices.length < 5) return null
-  const returns = []
-  for (let i = 1; i < prices.length; i++) returns.push((prices[i] - prices[i - 1]) / prices[i - 1])
-  const mean = returns.reduce((s, r) => s + r, 0) / returns.length
-  const std  = Math.sqrt(returns.reduce((s, r) => s + (r - mean) ** 2, 0) / returns.length)
-  if (std === 0) return null
-  return parseFloat(((mean - riskFreeDaily) / std * Math.sqrt(252)).toFixed(2))
+function calcADX(closes, highs, lows, period = 14) {
+  if (!closes || !highs || !lows) return null
+  const n = Math.min(closes.length, highs.length, lows.length)
+  if (n < period * 2 + 1) return null
+  const trArr = [], plusDM = [], minusDM = []
+  for (let i = 1; i < n; i++) {
+    const highDiff = highs[i] - highs[i - 1]
+    const lowDiff  = lows[i - 1] - lows[i]
+    const tr = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i]  - closes[i - 1])
+    )
+    trArr.push(tr)
+    plusDM.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0)
+    minusDM.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0)
+  }
+  const rma = (arr, p) => {
+    let val = arr.slice(0, p).reduce((s, v) => s + v, 0) / p
+    for (let i = p; i < arr.length; i++) val = (val * (p - 1) + arr[i]) / p
+    return val
+  }
+  const dxSeries = []
+  let trS = trArr.slice(0, period).reduce((s, v) => s + v, 0)
+  let pS  = plusDM.slice(0, period).reduce((s, v) => s + v, 0)
+  let mS  = minusDM.slice(0, period).reduce((s, v) => s + v, 0)
+  for (let i = period; i < trArr.length; i++) {
+    trS = trS - trS / period + trArr[i]
+    pS  = pS  - pS  / period + plusDM[i]
+    mS  = mS  - mS  / period + minusDM[i]
+    const di1 = trS === 0 ? 0 : (pS / trS) * 100
+    const di2 = trS === 0 ? 0 : (mS / trS) * 100
+    const s   = di1 + di2
+    dxSeries.push(s === 0 ? 0 : Math.abs(di1 - di2) / s * 100)
+  }
+  if (dxSeries.length < period) return null
+  return parseFloat(rma(dxSeries, period).toFixed(1))
 }
 
-function calcEMADev(prices, period = 20) {
-  if (!prices || prices.length < period) return null
-  const ema = calcEMA(prices, period)
-  if (ema === null) return null
-  return parseFloat(((prices[prices.length - 1] - ema) / ema * 100).toFixed(2))
+function calcPctFromHigh(price, high52w) {
+  if (!price || !high52w || high52w === 0) return null
+  return parseFloat(((price - high52w) / high52w * 100).toFixed(1))
 }
 
 // ── Days in current trend ────────────────────────────────────────────────────
