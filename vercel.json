@@ -1,9 +1,10 @@
 {
   "framework": "nextjs",
   "crons": [
-    {
-      "path": "/api/cron/daily-score?secret=arpi-cron-2026",
-      "schedule": "5 0 * * *"
-    }
+    { "path": "/api/cron/daily-score?secret=arpi-cron-2026", "schedule": "5 0 * * *" },
+    { "path": "/api/cron/s2-sync?secret=arpi-cron-2026",    "schedule": "1 0 * * *" },
+    { "path": "/api/cron/s2-sync?secret=arpi-cron-2026",    "schedule": "2 0 * * *" },
+    { "path": "/api/cron/s2-sync?secret=arpi-cron-2026",    "schedule": "3 0 * * *" },
+    { "path": "/api/cron/s2-sync?secret=arpi-cron-2026",    "schedule": "4 0 * * *" }
   ]
 }
