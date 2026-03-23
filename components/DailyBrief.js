@@ -9,17 +9,17 @@ function fmtPrice(v) {
 function tpiMeta(signal) {
   if (!signal?.state) return { label: '—', color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
   const s = signal.state
-  if (s.includes('MAX LONG'))  return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.2)' }
-  if (s.includes('LONG'))      return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.2)' }
-  if (s.includes('MAX SHORT')) return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)'  }
-  if (s.includes('SHORT'))     return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)'  }
+  if (s.includes('MAX LONG'))  return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.2)'  }
+  if (s.includes('LONG'))      return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.2)'  }
+  if (s.includes('MAX SHORT')) return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',   border: 'rgba(239,68,68,.2)'   }
+  if (s.includes('SHORT'))     return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',   border: 'rgba(239,68,68,.2)'   }
   return { label: s, color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
 }
 
 function fmtTpiDetail(signal) {
   if (!signal) return '—'
-  const tpi   = signal.tpi ?? null
-  const roc   = signal.roc ?? null
+  const tpi = signal.tpi ?? null
+  const roc = signal.roc ?? null
   const state = tpiMeta(signal).label
   const tpiStr = tpi !== null ? ` (${tpi >= 0 ? '+' : ''}${Number(tpi).toFixed(2)})` : ''
   const rocStr = roc !== null
@@ -28,18 +28,11 @@ function fmtTpiDetail(signal) {
   return `${state.toLowerCase()}${tpiStr}${rocStr}`
 }
 
-// Normalise a TV asset ticker to a clean display label
-// Handles: ETHUSD → ETH, BTCUSDT → BTC, PAXG → GOLD, USD → USD (not stripped)
 function normaliseAsset(raw) {
   if (!raw) return null
   const s = raw.toUpperCase().trim()
-  // Explicit map first — catches plain 'USD' before the regex strips it
-  const MAP = {
-    BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', SUI: 'SUI',
-    XRP: 'XRP', BNB: 'BNB', PAXG: 'GOLD', USD: 'USD',
-  }
+  const MAP = { BTC:'BTC', ETH:'ETH', SOL:'SOL', SUI:'SUI', XRP:'XRP', BNB:'BNB', PAXG:'GOLD', USD:'USD' }
   if (MAP[s]) return MAP[s]
-  // Strip quote currency suffix from composite tickers (e.g. ETHUSD → ETH)
   const stripped = s.replace(/(USDT|USDC|USD|PERP)$/, '').trim()
   return MAP[stripped] ?? (stripped || null)
 }
@@ -56,27 +49,14 @@ function fmtS1(signal) {
   return 'USD'
 }
 
-// Format S2 signal — handles cash (all-zero alloc), active alloc, and plain asset
 function fmtS2(signal) {
   if (!signal) return '—'
-
-  // Cash / USD: asset is USD regardless of alloc values
   const assetUpper = (signal.asset ?? '').toUpperCase()
-  if (assetUpper === 'USD' || assetUpper === '') {
-    return 'USD 100%'
-  }
-
-  // Active allocation: show percentages
+  if (assetUpper === 'USD' || assetUpper === '') return 'USD 100%'
   if (signal.alloc) {
-    const entries = Object.entries(signal.alloc)
-      .filter(([, v]) => v > 0)
-      .sort(([, a], [, b]) => b - a)
-    if (entries.length) {
-      return entries.map(([k, v]) => `${v}% ${normaliseAsset(k)}`).join(' + ')
-    }
+    const entries = Object.entries(signal.alloc).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a)
+    if (entries.length) return entries.map(([k, v]) => `${v}% ${normaliseAsset(k)}`).join(' + ')
   }
-
-  // Fallback: just show the normalised asset name
   return normaliseAsset(signal.asset) ?? '—'
 }
 
@@ -90,30 +70,84 @@ function viMeta(v) {
   return             { color: '#059669', bg: 'rgba(16,185,129,.1)',   border: 'rgba(16,185,129,.3)',  pill: 'DEEP VALUE' }
 }
 
-const PILL = {
-  display: 'inline-block', padding: '2px 9px', borderRadius: 20,
-  fontSize: 11, fontWeight: 700, lineHeight: 1.4,
+function fgZoneMeta(v) {
+  if (v == null) return { color: '#6b7280', label: 'N/A' }
+  if (v <= 25) return { color: '#ef4444', label: 'Extreme Fear' }
+  if (v <= 45) return { color: '#f97316', label: 'Fear' }
+  if (v <= 55) return { color: '#f59e0b', label: 'Neutral' }
+  if (v <= 75) return { color: '#84cc16', label: 'Greed' }
+  return           { color: '#22c55e', label: 'Extreme Greed' }
 }
+
+function oiRegimeLabel(oiRising, priceUp) {
+  if (oiRising === null) return '—'
+  if (oiRising && priceUp)   return 'OI ↑ Price ↑'
+  if (oiRising && !priceUp)  return 'OI ↑ Price ↓'
+  if (!oiRising && priceUp)  return 'OI ↓ Price ↑'
+  return 'OI ↓ Price ↓'
+}
+
+function frLabel(frPct) {
+  if (frPct === null) return 'FR N/A'
+  if (frPct <= -0.005) return 'Funding Negative'
+  if (frPct <=  0.005) return 'Funding Neutral'
+  if (frPct <=  0.050) return 'Funding Positive'
+  return 'Funding Overheated'
+}
+
+const PILL = { display: 'inline-block', padding: '2px 9px', borderRadius: 20, fontSize: 11, fontWeight: 700, lineHeight: 1.4 }
 const LABEL = {
   fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
   fontSize: 11, fontWeight: 600, color: '#6b7280',
   textTransform: 'uppercase', letterSpacing: '0.06em',
 }
-const ROW = {
-  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-  padding: '8px 0', borderBottom: '1px solid #f3f4f6',
-}
+const ROW = { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f3f4f6' }
 
 export default function DailyBrief() {
-  const [data,    setData]    = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [data,       setData]       = useState(null)
+  const [loading,    setLoading]    = useState(true)
+  // Extra data for the 3 new rows — fetched client-side
+  const [fgToday,    setFgToday]    = useState(null)
+  const [fg7d,       setFg7d]       = useState(null)
+  const [oiRising,   setOiRising]   = useState(null)
+  const [priceUp,    setPriceUp]    = useState(null)
+  const [frPct,      setFrPct]      = useState(null)
+  const [checklist,  setChecklist]  = useState(null)
 
   useEffect(() => {
+    // Signals (already fetched by DailyBrief)
     fetch('/api/signals?history=false')
+      .then(r => r.json()).then(setData).catch(() => {}).finally(() => setLoading(false))
+
+    // F&G — 8 days to get today + 7d ago
+    fetch('https://api.alternative.me/fng/?limit=8&format=json')
       .then(r => r.json())
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false))
+      .then(d => {
+        const list = d?.data ?? []
+        setFgToday(list[0] ? parseInt(list[0].value) : null)
+        setFg7d(list[7]    ? parseInt(list[7].value) : null)
+      }).catch(() => {})
+
+    // Bybit: OI delta + funding rate
+    Promise.all([
+      fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT').then(r=>r.json()),
+      fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=2').then(r=>r.json()),
+    ]).then(([ticker, oi]) => {
+      const t = ticker.result?.list?.[0]
+      if (t) {
+        const fr = parseFloat(t.fundingRate) * 100
+        setFrPct(fr)
+        setPriceUp(parseFloat(t.price24hPcnt) > 0)
+      }
+      const list = oi.result?.list ?? []
+      if (list.length >= 2) {
+        setOiRising(parseFloat(list[0].openInterest) > parseFloat(list[1].openInterest))
+      }
+    }).catch(() => {})
+
+    // Checklist (server-side, no Bybit params needed for the summary label)
+    fetch('/api/checklist')
+      .then(r => r.json()).then(setChecklist).catch(() => {})
   }, [])
 
   if (loading) return (
@@ -130,6 +164,26 @@ export default function DailyBrief() {
   const tpi  = tpiMeta(btc)
   const viM  = viMeta(vi?.value)
   const vi2M = viMeta(vi2?.value)
+
+  // F&G display
+  const fgMeta  = fgZoneMeta(fgToday)
+  const fgDelta = fgToday !== null && fg7d !== null ? fgToday - fg7d : null
+
+  // OI+FR regime
+  const regimeStr = oiRegimeLabel(oiRising, priceUp)
+  const frStr     = frLabel(frPct)
+
+  // Checklist summary
+  const clBias  = checklist?.bias ?? null
+  const clLong  = checklist?.longScore ?? null
+  const clShort = checklist?.shortScore ?? null
+  const clTotal = checklist?.total ?? 6
+  const clScore = clLong !== null && clShort !== null
+    ? Math.max(clLong, clShort)
+    : null
+  const clColor = clBias === 'LONG'  ? '#059669'
+                : clBias === 'SHORT' ? '#dc2626'
+                : '#f59e0b'
 
   return (
     <div>
@@ -164,7 +218,7 @@ export default function DailyBrief() {
           <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>{fmtS1(rot)}</span>
         </div>
 
-        {/* System 2 — now correctly shows USD 100% for cash signal */}
+        {/* System 2 */}
         <div style={ROW}>
           <span style={LABEL}>ROTATOOOR System 2</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', maxWidth: '55%' }}>
@@ -193,7 +247,7 @@ export default function DailyBrief() {
         </div>
 
         {/* Full-cycle VI */}
-        <div style={{ ...ROW, borderBottom: 'none', paddingBottom: 0 }}>
+        <div style={ROW}>
           <span style={LABEL}>Full-cycle valuation</span>
           <div style={{ textAlign: 'right' }}>
             <span style={{ fontSize: 14, fontWeight: 800, color: vi2M.color, marginRight: 6 }}>
@@ -202,6 +256,67 @@ export default function DailyBrief() {
             <span style={{ ...PILL, background: vi2M.bg, color: vi2M.color, border: `1px solid ${vi2M.border}`, fontSize: 10 }}>
               {vi2M.pill}
             </span>
+          </div>
+        </div>
+
+        {/* ── NEW ROW 1: Fear & Greed ── */}
+        <div style={ROW}>
+          <span style={LABEL}>Fear & Greed</span>
+          <div style={{ textAlign: 'right' }}>
+            {fgToday !== null ? (
+              <>
+                <span style={{ fontSize: 14, fontWeight: 800, color: fgMeta.color, marginRight: 6 }}>
+                  {fgToday}
+                </span>
+                <span style={{ ...PILL, background: fgMeta.color + '18', color: fgMeta.color, border: `1px solid ${fgMeta.color}40`, fontSize: 10 }}>
+                  {fgMeta.label}
+                </span>
+                {fgDelta !== null && (
+                  <span style={{ fontSize: 11, color: fgDelta >= 0 ? '#059669' : '#dc2626', marginLeft: 8, fontWeight: 600 }}>
+                    {fgDelta >= 0 ? '+' : ''}{fgDelta} vs 7D ago
+                  </span>
+                )}
+              </>
+            ) : (
+              <span style={{ ...LABEL, color: '#d1d5db', textTransform: 'none' }}>Loading…</span>
+            )}
+          </div>
+        </div>
+
+        {/* ── NEW ROW 2: OI × Funding Regime ── */}
+        <div style={ROW}>
+          <span style={LABEL}>OI × Funding Regime</span>
+          <div style={{ textAlign: 'right' }}>
+            {oiRising !== null ? (
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
+                {regimeStr}
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#9ca3af', marginLeft: 8 }}>·</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: frPct !== null && frPct > 0.05 ? '#ef4444' : frPct !== null && frPct < -0.005 ? '#10b981' : '#6b7280', marginLeft: 6 }}>
+                  {frStr}
+                </span>
+              </span>
+            ) : (
+              <span style={{ ...LABEL, color: '#d1d5db', textTransform: 'none' }}>Loading…</span>
+            )}
+          </div>
+        </div>
+
+        {/* ── NEW ROW 3: Leverage Checklist ── */}
+        <div style={{ ...ROW, borderBottom: 'none', paddingBottom: 0 }}>
+          <span style={LABEL}>Leverage Checklist</span>
+          <div style={{ textAlign: 'right' }}>
+            {checklist ? (
+              <>
+                <span style={{ fontSize: 13, fontWeight: 700, color: clColor, marginRight: 6 }}>
+                  {clBias ?? 'NEUTRAL'}
+                </span>
+                <span style={{ ...PILL, background: clColor + '18', color: clColor, border: `1px solid ${clColor}40`, fontSize: 10 }}>
+                  {clScore ?? '—'}/{clTotal} conditions
+                </span>
+              </>
+            ) : (
+              <span style={{ ...LABEL, color: '#d1d5db', textTransform: 'none' }}>Loading…</span>
+            )}
           </div>
         </div>
 
