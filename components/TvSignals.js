@@ -166,7 +166,7 @@ function CombinedChart({ history, transitions }) {
       ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(2)}`, pX(i), H - 4)
     })
   }, [history, transitions])
-  return <canvas ref={canvasRef} style={{ width: '100%', height: 420, display: 'block', borderRadius: 6 }} />
+  return <canvas ref={canvasRef} style={{ width: '100%', height: '100%', flex: 1, display: 'block', borderRadius: 6, minHeight: 340 }} />
 }
 // ─── Shared data hook ─────────────────────────────────────────────────────────
 function useSignalData() {
@@ -259,13 +259,13 @@ export function TvSignalChart() {
   const btcHistory   = data?.history?.btc || []
   const rawTransitions = data?.transitions || []
   if (loading && !btcHistory.length) return (
-    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '3rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)' }}>
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '3rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)', height: '100%', boxSizing: 'border-box' }}>
       <div style={{ ...LABEL, color: '#d1d5db' }}>Loading chart…</div>
     </div>
   )
   const LEGEND = [['#10b981','Risk On'],['#ef4444','Risk Off'],['#8b5cf6','L/S equity'],['#f59e0b','Hold/Sell']]
   return (
-    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '1.25rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)' }}>
+    <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, padding: '1.25rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)', height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ ...LABEL }}>BTC Price vs. TPI Strategies</div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -278,7 +278,9 @@ export function TvSignalChart() {
         </div>
       </div>
       {btcHistory.length > 1 ? (
-        <CombinedChart history={btcHistory} transitions={rawTransitions} />
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <CombinedChart history={btcHistory} transitions={rawTransitions} />
+        </div>
       ) : (
         <div style={{ height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
           <span style={{ ...LABEL, color: '#d1d5db' }}>Chart populates after first TradingView alert</span>
