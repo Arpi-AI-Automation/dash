@@ -208,6 +208,28 @@ export default function DecisionChecklist() {
       setData(json)
       setLastUpdated(new Date())
       setError(null)
+      // Write today's full score (including Bybit OI/taker) to Redis
+      // so the backtest reads the same values we just computed
+      try {
+        const today = new Date().toISOString().slice(0, 10)
+        await fetch('/api/checklist-store', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            date:           today,
+            longScore:      json.longScore,
+            shortScore:     json.shortScore,
+            fg:             json.meta?.fearGreed        ?? null,
+            frPct:          json.meta?.frPct            ?? null,
+            tpiState:       json.tpiSignal              ?? null,
+            oiRising:       oiCurr !== null && oiPrev !== null ? oiCurr > oiPrev : null,
+            takerBuyRatio:  takerBuyRatio,
+            domTrend:       json.meta?.dominanceTrend   ?? null,
+            priceChangePct: price24hPcnt !== null ? price24hPcnt * 100 : null,
+            price:          null,
+          }),
+        })
+      } catch (_) {}
     } catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }, [])
