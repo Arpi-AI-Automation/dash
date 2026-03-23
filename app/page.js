@@ -99,6 +99,7 @@ export default function Home() {
 
         {/* ROW 6 — OI Scatter */}
         <div style={{ ...cardPurple, marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Futures OI vs Price</div>
           <OIScatter />
         </div>
 
