@@ -64,13 +64,19 @@ export default function Home() {
           <RotationChart2 />
         </div>
 
-        {/* ROW 3 — AI Hedge Portfolio */}
+        {/* ROW 3 — Decision Checklist — Long vs Short (daily close) */}
+        <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Decision Checklist — Long vs Short</div>
+          <DecisionChecklist />
+        </div>
+
+        {/* ROW 4 — AI Hedge Portfolio */}
         <div style={{ ...cardYellow, marginBottom: '1.25rem' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>AI Hedge Portfolio</div>
           <AiHedgePortfolio />
         </div>
 
-        {/* ROW 4 — Valuation + Funding */}
+        {/* ROW 5 — Valuation + Funding */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardGreen}>
             <span style={LABEL}>SDCA Valuations</span>
@@ -82,28 +88,22 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ROW 5 — Fear & Greed (full width) */}
+        {/* ROW 6 — Fear & Greed (full width) */}
         <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1.25rem' }}>Fear & Greed</div>
           <FearGreed />
         </div>
 
-        {/* ROW 6 — OI Scatter */}
+        {/* ROW 7 — OI Scatter */}
         <div style={{ ...cardPurple, marginBottom: '1.25rem' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Futures OI vs Price</div>
           <OIScatter />
         </div>
 
-        {/* ROW 7 — VS BTC */}
+        {/* ROW 8 — VS BTC */}
         <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
           <span style={LABEL}>vs BTC — Asset outperformance</span>
           <BtcComparison />
-        </div>
-
-        {/* ROW 8 — Decision Checklist (full width, verdict included) */}
-        <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Decision Checklist — Long vs Short</div>
-          <DecisionChecklist />
         </div>
 
         {/* ROW 9 — Backtest */}
