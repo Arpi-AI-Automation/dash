@@ -78,14 +78,12 @@ function DualChart({ fg, btcAligned, range }) {
       ctx.scale(dpr, dpr)
 
       const W = rect.width, H = rect.height
-      const PAD = { top: 16, right: hasBtc ? 56 : 12, bottom: 28, left: 34 }
+      const PAD = { top: 16, right: hasBtc ? 60 : 12, bottom: 30, left: 38 }
       const iW  = W - PAD.left - PAD.right
       const iH  = H - PAD.top  - PAD.bottom
       const n   = fgSlice.length
 
       ctx.clearRect(0, 0, W, H)
-
-      // Light chart bg
       ctx.fillStyle = '#f9fafb'
       ctx.fillRect(PAD.left, PAD.top, iW, iH)
 
@@ -97,20 +95,34 @@ function DualChart({ fg, btcAligned, range }) {
       const btcMax   = validBtc.length ? Math.max(...validBtc) * 1.03 : 1
       const toYbtc   = v => PAD.top + iH - ((v - btcMin) / (btcMax - btcMin)) * iH
 
-      // Zone bands (light fills)
+      // Zone bands
       ;[[0,25,'rgba(239,68,68,.07)'],[25,45,'rgba(249,115,22,.06)'],[45,55,'rgba(245,158,11,.05)'],[55,75,'rgba(132,204,22,.06)'],[75,100,'rgba(34,197,94,.07)']].forEach(([lo, hi, col]) => {
         ctx.fillStyle = col
         ctx.fillRect(PAD.left, toYfg(hi), iW, toYfg(lo) - toYfg(hi))
       })
 
-      // Grid lines + F&G left axis labels
-      ctx.font = '9px -apple-system,sans-serif'
+      // Grid + F&G Y labels
+      ctx.font = '10px -apple-system,sans-serif'
       ;[0, 25, 50, 75, 100].forEach(v => {
         ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 0.5; ctx.setLineDash([2, 4])
         ctx.beginPath(); ctx.moveTo(PAD.left, toYfg(v)); ctx.lineTo(W - PAD.right, toYfg(v)); ctx.stroke()
         ctx.setLineDash([])
         ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'right'
-        ctx.fillText(v, PAD.left - 4, toYfg(v) + 3)
+        ctx.fillText(v, PAD.left - 5, toYfg(v) + 3)
+      })
+
+      // Zone labels on Y axis
+      const zoneLabels = [
+        { v: 12, label: 'Ext. Fear', color: '#ef4444' },
+        { v: 35, label: 'Fear',      color: '#f97316' },
+        { v: 50, label: 'Neutral',   color: '#f59e0b' },
+        { v: 65, label: 'Greed',     color: '#84cc16' },
+        { v: 87, label: 'Ext. Greed', color: '#22c55e' },
+      ]
+      ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'left'
+      zoneLabels.forEach(z => {
+        ctx.fillStyle = z.color + '99'
+        ctx.fillText(z.label, PAD.left + 4, toYfg(z.v) + 3)
       })
 
       // BTC price line
@@ -125,14 +137,13 @@ function DualChart({ fg, btcAligned, range }) {
         ctx.strokeStyle = '#f7931a'; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.55; ctx.stroke()
         ctx.globalAlpha = 1
 
-        // Right axis labels
         ctx.fillStyle = 'rgba(247,147,26,.6)'; ctx.textAlign = 'left'; ctx.font = '9px -apple-system,sans-serif'
         const labelVals = [btcMin / 0.97, (btcMin / 0.97 + btcMax / 1.03) / 2, btcMax / 1.03]
         labelVals.forEach(v => ctx.fillText(fmtPrice(v), W - PAD.right + 4, toYbtc(v) + 3))
       }
 
-      // F&G coloured line
-      ctx.lineWidth = 1.8
+      // F&G coloured line — slightly thicker at full width
+      ctx.lineWidth = 2
       fgSlice.forEach((p, i) => {
         if (i === 0) return
         ctx.strokeStyle = getZone(p.value).color
@@ -145,16 +156,17 @@ function DualChart({ fg, btcAligned, range }) {
       // Last dot
       const last = fgSlice[fgSlice.length - 1]
       if (last) {
-        ctx.beginPath(); ctx.arc(toX(n - 1), toYfg(last.value), 4, 0, Math.PI * 2)
+        ctx.beginPath(); ctx.arc(toX(n - 1), toYfg(last.value), 5, 0, Math.PI * 2)
         ctx.fillStyle = getZone(last.value).color; ctx.fill()
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke()
       }
 
       // X axis labels
       ctx.fillStyle = '#9ca3af'; ctx.textAlign = 'center'; ctx.font = '9px -apple-system,sans-serif'
-      const lc = Math.min(7, n)
+      const lc = Math.min(9, n)
       for (let i = 0; i < lc; i++) {
         const idx = Math.round(i * (n - 1) / (lc - 1))
-        ctx.fillText(fmtDateShort(fgSlice[idx].ts), toX(idx), H - PAD.bottom + 14)
+        ctx.fillText(fmtDateShort(fgSlice[idx].ts), toX(idx), H - PAD.bottom + 16)
       }
 
       metaRef.current = { PAD, iW, n, fgSlice, btcSlice, toX, toYfg, toYbtc, W, H }
@@ -181,7 +193,7 @@ function DualChart({ fg, btcAligned, range }) {
   }, [])
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: 220 }}>
+    <div style={{ position: 'relative', width: '100%', height: 260 }}>
       <canvas
         ref={canvasRef}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'crosshair', borderRadius: 8 }}
@@ -191,13 +203,13 @@ function DualChart({ fg, btcAligned, range }) {
       {tooltip && (
         <div style={{
           pointerEvents: 'none', position: 'absolute', top: 8, zIndex: 10,
-          left: Math.min(tooltip.x + 12, 220),
+          left: Math.min(tooltip.x + 14, (canvasRef.current?.offsetWidth ?? 600) - 190),
           background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
-          padding: '8px 12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)',
+          padding: '10px 14px', boxShadow: '0 4px 12px rgba(0,0,0,.08)',
           whiteSpace: 'nowrap',
         }}>
           <div style={{ ...LBL, marginBottom: 4, textTransform: 'none' }}>{tooltip.date}</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: tooltip.color }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: tooltip.color }}>
             F&G {tooltip.fg} · {tooltip.label}
           </div>
           {tooltip.btc != null && (
@@ -251,6 +263,7 @@ export default function FearGreed() {
   const zone   = today ? getZone(today.value) : null
   const val7d  = fg[fg.length - 8]
   const val30d = fg[fg.length - 31]
+  const val90d = fg[fg.length - 91]
   const btcAligned = useMemo(() => alignBtc(fg, btc), [fg, btc])
 
   if (loading) return <div style={{ ...LBL, color: '#d1d5db', padding: '1rem 0' }}>Loading…</div>
@@ -259,85 +272,98 @@ export default function FearGreed() {
 
   return (
     <div>
-      {/* ── Current reading row ─────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginBottom: 16, flexWrap: 'wrap' }}>
+      {/* ── Stats row — more breathing room at full width ─────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 32, marginBottom: 20, flexWrap: 'wrap' }}>
 
         {/* Big number */}
         <div>
-          <div style={{ ...LBL, marginBottom: 4 }}>Today</div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span style={{ fontSize: 44, fontWeight: 800, lineHeight: 1, color: zone.color,
-              fontVariantNumeric: 'tabular-nums' }}>
-              {today.value}
-            </span>
+          <div style={{ ...LBL, marginBottom: 6 }}>Today</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
             <span style={{
-              fontSize: 11, fontWeight: 700, color: zone.color,
+              fontSize: 56, fontWeight: 800, lineHeight: 1, color: zone.color,
+              fontVariantNumeric: 'tabular-nums',
+            }}>{today.value}</span>
+            <span style={{
+              fontSize: 12, fontWeight: 700, color: zone.color,
               background: zone.color + '18', border: `1px solid ${zone.color}40`,
-              borderRadius: 20, padding: '3px 10px', marginBottom: 4,
-            }}>{zone.label.toUpperCase()}</span>
+              borderRadius: 20, padding: '4px 12px', marginBottom: 6,
+            }}>{zone.label}</span>
           </div>
         </div>
 
         {/* Divider */}
-        <div style={{ width: 1, height: 44, background: '#e5e7eb' }} />
+        <div style={{ width: 1, height: 52, background: '#e5e7eb', flexShrink: 0 }} />
 
-        {/* 7D + 30D */}
-        {[{ label: '7D ago', val: val7d }, { label: '30D ago', val: val30d }].map(({ label, val }) => {
+        {/* Historical snapshots */}
+        {[
+          { label: '7D ago',  val: val7d  },
+          { label: '30D ago', val: val30d },
+          { label: '90D ago', val: val90d },
+        ].map(({ label, val }) => {
           if (!val) return null
           const z = getZone(val.value)
           return (
             <div key={label}>
-              <div style={{ ...LBL, marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 24, fontWeight: 800, color: z.color, fontVariantNumeric: 'tabular-nums' }}>
+              <div style={{ ...LBL, marginBottom: 6 }}>{label}</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: z.color, fontVariantNumeric: 'tabular-nums', lineHeight: 1, marginBottom: 4 }}>
                 {val.value}
               </div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: z.color, marginTop: 2 }}>
-                {z.label.toUpperCase()}
-              </div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: z.color,
+                background: z.color + '18', border: `1px solid ${z.color}40`,
+                borderRadius: 20, padding: '2px 8px', display: 'inline-block',
+              }}>{z.label}</div>
             </div>
           )
         })}
 
-        {/* Zone legend — right-aligned */}
-        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {ZONES.map(z => (
-            <div key={z.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ width: 7, height: 7, borderRadius: '50%', background: z.color }} />
-              <span style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af' }}>{z.label}</span>
-            </div>
-          ))}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-            <div style={{ width: 12, borderTop: '1px solid rgba(247,147,26,.5)' }} />
-            <span style={{ fontSize: 10, color: 'rgba(247,147,26,.7)', fontWeight: 600 }}>BTC price</span>
+        {/* Gauge bar — right aligned, takes remaining space */}
+        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 200 }}>
+          <div style={{ ...LBL, marginBottom: 8 }}>Scale</div>
+          <div style={{ position: 'relative', height: 10, borderRadius: 9999, overflow: 'hidden',
+            background: 'linear-gradient(to right, #ef4444, #f97316, #f59e0b, #84cc16, #22c55e)',
+          }}>
+            <div style={{
+              position: 'absolute', top: -3, width: 16, height: 16, borderRadius: '50%',
+              background: zone.color, border: '2px solid #fff', boxShadow: `0 0 0 1px ${zone.color}`,
+              left: `calc(${today.value}% - 8px)`, transition: 'left .5s',
+            }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+            <span style={{ fontSize: 10, color: '#ef4444', fontWeight: 600 }}>0 Fear</span>
+            <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>50</span>
+            <span style={{ fontSize: 10, color: '#22c55e', fontWeight: 600 }}>100 Greed</span>
+          </div>
+          {/* Zone legend */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+            {ZONES.map(z => (
+              <span key={z.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: z.color, display: 'inline-block' }} />
+                <span style={{ fontSize: 10, color: '#9ca3af' }}>{z.label}</span>
+              </span>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* ── Range selector ──────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 10 }}>
+      {/* ── Range selector ──────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
         {RANGE_OPTS.map(opt => (
-          <button
-            key={opt.label}
-            onClick={() => setRange(opt.days)}
-            style={{
-              padding: '3px 10px', borderRadius: 20, cursor: 'pointer',
-              fontSize: 11, fontWeight: 600,
-              border: range === opt.days ? `1px solid #3b82f6` : '1px solid #e5e7eb',
-              background: range === opt.days ? '#3b82f6' : 'transparent',
-              color: range === opt.days ? '#fff' : '#6b7280',
-              transition: 'all .15s',
-            }}
-          >{opt.label}</button>
+          <button key={opt.label} onClick={() => setRange(opt.days)} style={{
+            padding: '4px 14px', borderRadius: 20, cursor: 'pointer',
+            fontSize: 11, fontWeight: 600,
+            border: range === opt.days ? '1px solid #3b82f6' : '1px solid #e5e7eb',
+            background: range === opt.days ? '#3b82f6' : 'transparent',
+            color: range === opt.days ? '#fff' : '#6b7280',
+            transition: 'all .15s',
+          }}>{opt.label}</button>
         ))}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#d1d5db', alignSelf: 'center' }}>
+          {fg.length} days · BTC overlay: CoinGecko
+        </span>
       </div>
 
-      {/* ── Chart ────────────────────────────────────────────────────────── */}
+      {/* ── Chart ────────────────────────────────────────────────────────────── */}
       <DualChart fg={fg} btcAligned={btcAligned} range={range} />
-
-      {/* ── Footer note ──────────────────────────────────────────────────── */}
-      <div style={{ marginTop: 8, fontSize: 10, color: '#d1d5db' }}>
-        Source: Alternative.me · {fg.length} days · BTC overlay: CoinGecko
-      </div>
     </div>
   )
 }
