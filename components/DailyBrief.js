@@ -8,13 +8,22 @@ function fmtPrice(v) {
   return 'US$' + Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 
+function tpiStateLabel(state) {
+  if (!state) return '—'
+  if (state.includes('MAX LONG'))  return 'TPI Positive · Risk On'
+  if (state.includes('LONG'))      return 'TPI Positive · Risk On'
+  if (state.includes('MAX SHORT')) return 'TPI Negative · Risk Off'
+  if (state.includes('SHORT'))     return 'TPI Negative · Risk Off'
+  return state
+}
+
 function tpiMeta(signal) {
   if (!signal?.state) return { label: '—', color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
   const s = signal.state
-  if (s.includes('MAX LONG'))  return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.25)' }
-  if (s.includes('LONG'))      return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.25)' }
-  if (s.includes('MAX SHORT')) return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',   border: 'rgba(239,68,68,.25)'  }
-  if (s.includes('SHORT'))     return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',   border: 'rgba(239,68,68,.25)'  }
+  if (s.includes('MAX LONG'))  return { label: tpiStateLabel(s), color: '#059669', bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.25)' }
+  if (s.includes('LONG'))      return { label: tpiStateLabel(s), color: '#059669', bg: 'rgba(16,185,129,.1)',  border: 'rgba(16,185,129,.25)' }
+  if (s.includes('MAX SHORT')) return { label: tpiStateLabel(s), color: '#dc2626', bg: 'rgba(239,68,68,.1)',   border: 'rgba(239,68,68,.25)'  }
+  if (s.includes('SHORT'))     return { label: tpiStateLabel(s), color: '#dc2626', bg: 'rgba(239,68,68,.1)',   border: 'rgba(239,68,68,.25)'  }
   return { label: s, color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
 }
 
@@ -124,7 +133,7 @@ function Row({ label, children, last = false, sectionStart = false }) {
     }}>
       <span style={{
         fontFamily: FONT, fontSize: 11, fontWeight: 600,
-        color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.07em',
+        color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em',
         flexShrink: 0,
       }}>{label}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 1, minWidth: 0, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
@@ -170,7 +179,7 @@ function Sub({ children }) {
 function SectionDivider({ label }) {
   return (
     <div style={{ padding: '8px 0 2px', borderBottom: '1px solid #e5e7eb' }}>
-      <span style={{ fontFamily: FONT, fontSize: 10, fontWeight: 700, color: '#d1d5db', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+      <span style={{ fontFamily: FONT, fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
         {label}
       </span>
     </div>
@@ -238,7 +247,7 @@ export default function DailyBrief() {
   }, [])
 
   if (loading) return (
-    <div style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: '#d1d5db',
+    <div style={{ fontFamily: FONT, fontSize: 11, fontWeight: 600, color: '#9ca3af',
       textTransform: 'uppercase', letterSpacing: '0.07em', padding: '1rem 0' }}>
       Loading…
     </div>
@@ -266,8 +275,14 @@ export default function DailyBrief() {
 
       {/* ── Price hero ── */}
       <div style={{ marginBottom: '1.1rem' }}>
-        <div style={{ fontSize: 10, fontWeight: 600, color: '#d1d5db', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-          UTC Close
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 7 }}>
+          <svg width="16" height="16" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="16" fill="#f7931a"/>
+            <path d="M22.3 13.4c.3-2.1-1.3-3.2-3.5-4l.7-2.8-1.7-.4-.7 2.7-.9-.2.7-2.7-1.7-.4-.7 2.8c-.2-.1-.5-.1-.7-.2v0l-2.3-.6-.4 1.8s1.3.3 1.2.3c.7.2.8.6.8 1l-.9 3.4c.1 0 .1.1.2.1h-.2l-1.2 4.8c-.1.2-.3.6-.8.4 0 0-1.2-.3-1.2-.3l-.8 1.9 2.2.6.8.2-.7 2.8 1.7.4.7-2.8.9.2-.7 2.8 1.7.4.7-2.8c2.8.5 4.9.3 5.8-2.2.7-2-.1-3.2-1.5-3.9 1-.3 1.8-1 2-2.4zm-3.6 5c-.5 2-3.9.9-5 .6l.9-3.5c1.1.3 4.7.8 4.1 2.9zm.5-5c-.5 1.8-3.3.9-4.2.7l.8-3.2c.9.2 3.9.7 3.4 2.5z" fill="white"/>
+          </svg>
+          <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Bitcoin · UTC Close
+          </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 30, fontWeight: 800, color: '#111827', lineHeight: 1, letterSpacing: '-0.02em' }}>
@@ -293,25 +308,25 @@ export default function DailyBrief() {
       {/* ── Signals section ── */}
       <SectionDivider label="Signals" />
 
-      <Row label="System 1">
+      <Row label="RSPS 1">
         <Val>{fmtS1(rot)}</Val>
       </Row>
 
-      <Row label="System 2">
+      <Row label="RSPS 2">
         <Val>{fmtS2(s2)}</Val>
       </Row>
 
       {/* ── Market Cycle section ── */}
       <SectionDivider label="Market Cycle" />
 
-      <Row label="Short-term VI">
+      <Row label="Short-term Valuation">
         {vi?.value != null && (
           <Val color={viM.color}>{vi.value >= 0 ? '+' : ''}{Number(vi.value).toFixed(3)}</Val>
         )}
         <Pill color={viM.color}>{viM.pill}</Pill>
       </Row>
 
-      <Row label="Full-cycle VI">
+      <Row label="SDCA Valuation">
         {vi2?.value != null && (
           <Val color={vi2M.color}>{vi2.value >= 0 ? '+' : ''}{Number(vi2.value).toFixed(3)}</Val>
         )}
@@ -343,10 +358,10 @@ export default function DailyBrief() {
         ) : <Sub>Loading…</Sub>}
       </Row>
 
-      <Row label="Checklist" last>
+      <Row label="L/S Confluence" last>
         {checklist ? (
           <>
-            <Val color={clCol}>{clBias ?? 'NEUTRAL'}</Val>
+            <Val color={clCol}>{clBias === 'LONG' ? 'Risk On' : clBias === 'SHORT' ? 'Risk Off' : 'NEUTRAL'}</Val>
             <Pill color={clCol}>{clScore}/{clTotal}</Pill>
           </>
         ) : <Sub>Loading…</Sub>}
