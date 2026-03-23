@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
-// ── Hardcoded historical TPI transitions (pre-webhook) ────────────────────────
+// ── TPI transitions ───────────────────────────────────────────────────────────
 const TPI_TRANSITIONS_HISTORICAL = [
   {"date":"2024-12-07","state":"LONG"},  {"date":"2024-12-21","state":"SHORT"},
   {"date":"2025-01-16","state":"LONG"},  {"date":"2025-02-01","state":"SHORT"},
@@ -24,26 +24,67 @@ function interpolateTpi(transitions, date) {
   return state
 }
 
-// ── Fetch all data client-side (Bybit not blocked from browser) ───────────────
-async function fetchAllData() {
-  const [priceRes, fgRes, fundingRes, oiRes, takerRes, signalsRes] = await Promise.all([
+// ── Score a day using EXACT same logic as checklist/route.js buildChecklist() ─
+// frPct = fundingRate * 100, all others as described
+function scoreDay({ frPct, fg, tpiState, oiPrev, oiCurr, priceChangePct, takerBuyRatio, domTrend }) {
+  const priceUp   = priceChangePct > 0
+  const priceDown = priceChangePct < 0
+  const oiRising  = (oiPrev !== null && oiCurr !== null) ? oiCurr > oiPrev : null
+  const hasDom    = domTrend !== null && domTrend !== undefined
+
+  const longScores = [
+    frPct         !== null ? (frPct <= 0.005 ? 1 : 0)           : null, // C1 FR neutral/neg
+    fg            !== null ? (fg < 30 ? 1 : 0)                  : null, // C2 Extreme fear
+    tpiState      !== null ? (tpiState === 'LONG' ? 1 : 0)       : null, // C3 TPI LONG
+    oiRising      !== null ? (oiRising && priceUp ? 1 : 0)       : null, // C4 OI↑ Price↑
+    hasDom               ? (domTrend === 'rising' ? 1 : 0)       : null, // C5 Dom rising
+    takerBuyRatio !== null ? (takerBuyRatio > 52 ? 1 : 0)        : null, // C6 CVD buy>52%
+  ]
+  const shortScores = [
+    frPct         !== null ? (frPct > 0.05 ? 1 : 0)             : null,
+    fg            !== null ? (fg > 70 ? 1 : 0)                  : null,
+    tpiState      !== null ? (tpiState === 'SHORT' ? 1 : 0)      : null,
+    oiRising      !== null ? (oiRising && priceDown ? 1 : 0)     : null,
+    hasDom               ? (domTrend === 'falling' ? 1 : 0)      : null,
+    takerBuyRatio !== null ? (takerBuyRatio < 48 ? 1 : 0)        : null,
+  ]
+
+  return {
+    longScore:  longScores.filter(v => v === 1).length,
+    shortScore: shortScores.filter(v => v === 1).length,
+    available:  longScores.filter(v => v !== null).length,
+    longScores, shortScores,
+  }
+}
+
+// ── Fetch ─────────────────────────────────────────────────────────────────────
+async function fetchBacktestData() {
+  const [priceRes, fgRes, fundingRes, oiRes, takerRes, klRes, signalsRes] = await Promise.all([
+    // CoinGecko: for price DISPLAY on chart only (not for scoring)
     fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=101&interval=daily'),
     fetch('https://api.alternative.me/fng/?limit=101&format=json'),
-    fetch('https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=200'),
-    fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=101'),
-    fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1d&limit=101'),
+    fetch('https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=300'),
+    fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=103'),
+    fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1d&limit=103'),
+    // Bybit daily kline: [time, open, high, low, close, vol, turnover] — for price change %
+    fetch('https://api.bybit.com/v5/market/kline?category=linear&symbol=BTCUSDT&interval=D&limit=103'),
     fetch('/api/signals?history=true').catch(() => null),
   ])
 
-  const [priceData, fgData, fundingData, oiData, takerData] = await Promise.all([
-    priceRes.json(), fgRes.json(), fundingRes.json(), oiRes.json(), takerRes.json(),
+  const [priceData, fgData, fundingData, oiData, takerData, klData] = await Promise.all([
+    priceRes.json(), fgRes.json(), fundingRes.json(), oiRes.json(),
+    takerRes.json(), klRes.json(),
   ])
+
   const signalsData = signalsRes ? await signalsRes.json().catch(() => null) : null
 
-  // Price map
-  const prices = priceData.prices.map(([ts, price]) => ({
-    date: new Date(ts).toISOString().slice(0, 10), price,
-  }))
+  // CoinGecko prices → used ONLY for the chart price line
+  // Deduplicate by date (take last if two same date)
+  const cgPriceMap = {}
+  for (const [ts, price] of priceData.prices) {
+    const d = new Date(ts).toISOString().slice(0, 10)
+    cgPriceMap[d] = price
+  }
 
   // F&G map
   const fgMap = {}
@@ -51,28 +92,36 @@ async function fetchAllData() {
     fgMap[new Date(parseInt(item.timestamp) * 1000).toISOString().slice(0, 10)] = parseInt(item.value)
   }
 
-  // Funding map: date → first funding rate of day
+  // Funding map: date → FIRST funding rate of that day (most conservative)
   const fundingMap = {}
   for (const item of (fundingData.result?.list ?? [])) {
     const date = new Date(parseInt(item.fundingRateTimestamp)).toISOString().slice(0, 10)
     if (!fundingMap[date]) fundingMap[date] = parseFloat(item.fundingRate)
   }
 
-  // OI map: date → openInterest (BTC quantity)
+  // OI map: date → openInterest
   const oiMap = {}
   for (const item of (oiData.result?.list ?? [])) {
-    const date = new Date(parseInt(item.timestamp)).toISOString().slice(0, 10)
-    oiMap[date] = parseFloat(item.openInterest)
+    oiMap[new Date(parseInt(item.timestamp)).toISOString().slice(0, 10)] = parseFloat(item.openInterest)
   }
 
-  // Taker map: date → buyRatio (0–100%)
+  // Taker map: date → buyRatio (0–100)
   const takerMap = {}
   for (const item of (takerData.result?.list ?? [])) {
-    const date = new Date(parseInt(item.timestamp)).toISOString().slice(0, 10)
-    takerMap[date] = parseFloat(item.buyRatio) * 100
+    takerMap[new Date(parseInt(item.timestamp)).toISOString().slice(0, 10)] = parseFloat(item.buyRatio) * 100
   }
 
-  // Merge TPI transitions: historical + live from Redis
+  // Kline map: date → { open, close, changePct }
+  // changePct = (close - open) / open * 100 — matches live checklist's price24hPcnt concept
+  const klMap = {}
+  for (const k of (klData.result?.list ?? [])) {
+    const date  = new Date(parseInt(k[0])).toISOString().slice(0, 10)
+    const open  = parseFloat(k[1])
+    const close = parseFloat(k[4])
+    klMap[date] = { open, close, changePct: ((close - open) / open) * 100 }
+  }
+
+  // Merge TPI transitions
   let tpiTransitions = [...TPI_TRANSITIONS_HISTORICAL]
   if (signalsData?.transitions) {
     const live = Array.isArray(signalsData.transitions)
@@ -82,63 +131,14 @@ async function fetchAllData() {
     tpiTransitions = Object.values(merged).sort((a, b) => a.date.localeCompare(b.date))
   }
 
-  // Stored daily checklist scores from Redis (already has dominance computed server-side)
+  // Stored daily checklist scores from Redis (ground truth at UTC close)
   const storedScores = {}
-  const checklistDaily = signalsData?.checklistDaily ?? []
-  const cdArray = Array.isArray(checklistDaily) ? checklistDaily : Object.values(checklistDaily)
-  for (const entry of cdArray) {
-    if (entry.date) storedScores[entry.date] = entry
-  }
+  const cdArray = Array.isArray(signalsData?.checklistDaily)
+    ? signalsData.checklistDaily
+    : Object.values(signalsData?.checklistDaily ?? {})
+  for (const e of cdArray) { if (e.date) storedScores[e.date] = e }
 
-  return { prices, fgMap, fundingMap, oiMap, takerMap, tpiTransitions, storedScores }
-}
-
-// ── Score a single day using IDENTICAL logic to the live checklist ────────────
-function scoreDay({ price, prevPrice, fg, frPct, tpiState, oiPrev, oiCurr, takerBuyRatio, domTrend }) {
-  const change24h   = prevPrice ? ((price - prevPrice) / prevPrice) * 100 : 0
-  const priceUp     = change24h > 0
-  const priceDown   = change24h < 0
-  const oiRising    = oiPrev !== null && oiCurr !== null ? oiCurr > oiPrev : null
-  const domRising   = domTrend === 'rising'
-  const domFalling  = domTrend === 'falling'
-  const hasDom      = domTrend !== null && domTrend !== undefined
-
-  // SAME thresholds as checklist/route.js buildChecklist()
-  const longScores = [
-    frPct          !== null ? (frPct <= 0.005 ? 1 : 0)            : null, // C1
-    fg             !== null ? (fg < 30 ? 1 : 0)                   : null, // C2
-    tpiState       !== null ? (tpiState === 'LONG' ? 1 : 0)        : null, // C3
-    oiRising       !== null ? (oiRising && priceUp ? 1 : 0)        : null, // C4
-    hasDom                  ? (domRising ? 1 : 0)                  : null, // C5
-    takerBuyRatio  !== null ? (takerBuyRatio > 52 ? 1 : 0)         : null, // C6
-  ]
-  const shortScores = [
-    frPct          !== null ? (frPct > 0.05 ? 1 : 0)              : null,
-    fg             !== null ? (fg > 70 ? 1 : 0)                   : null,
-    tpiState       !== null ? (tpiState === 'SHORT' ? 1 : 0)       : null,
-    oiRising       !== null ? (oiRising && priceDown ? 1 : 0)      : null,
-    hasDom                  ? (domFalling ? 1 : 0)                 : null,
-    takerBuyRatio  !== null ? (takerBuyRatio < 48 ? 1 : 0)         : null,
-  ]
-
-  const longScore  = longScores.filter(v => v === 1).length
-  const shortScore = shortScores.filter(v => v === 1).length
-  // Count only non-null conditions for "available" scoring
-  const available  = longScores.filter(v => v !== null).length
-
-  return {
-    price: Math.round(price),
-    change24h: parseFloat(change24h.toFixed(2)),
-    fg, frPct: frPct !== null ? parseFloat(frPct.toFixed(4)) : null,
-    tpiState, oiRising, takerBuyRatio, domTrend,
-    longScore, shortScore, total: 6, available,
-    net: longScore - shortScore,
-    fundingAvail: frPct !== null,
-    tpiAvail:     tpiState !== null,
-    oiAvail:      oiRising !== null,
-    takerAvail:   takerBuyRatio !== null,
-    domAvail:     hasDom,
-  }
+  return { cgPriceMap, fgMap, fundingMap, oiMap, takerMap, klMap, tpiTransitions, storedScores }
 }
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ const LBL = {
   textTransform: 'uppercase', letterSpacing: '0.06em',
 }
 
-// ── Chart drawing ─────────────────────────────────────────────────────────────
+// ── Chart ─────────────────────────────────────────────────────────────────────
 function drawChart(canvas, days, hoveredIdx) {
   if (!canvas || !days.length) return
   const dpr = window.devicePixelRatio || 1
@@ -158,25 +158,23 @@ function drawChart(canvas, days, hoveredIdx) {
   ctx.scale(dpr, dpr)
 
   const PAD = { top: 16, right: 52, bottom: 32, left: 12 }
-  const cW = W - PAD.left - PAD.right
-  const cH = H - PAD.top - PAD.bottom
+  const cW  = W - PAD.left - PAD.right
+  const cH  = H - PAD.top - PAD.bottom
   const priceH = Math.floor(cH * 0.55)
   const histH  = cH - priceH - 10
   const histY0 = PAD.top + priceH + 10
   const zeroY  = histY0 + histH / 2
 
   ctx.clearRect(0, 0, W, H)
-  ctx.fillStyle = '#f9fafb'
-  ctx.fillRect(PAD.left, PAD.top, cW, priceH)
-  ctx.fillStyle = '#f9fafb'
-  ctx.fillRect(PAD.left, histY0, cW, histH)
+  ctx.fillStyle = '#f9fafb'; ctx.fillRect(PAD.left, PAD.top, cW, priceH)
+  ctx.fillStyle = '#f9fafb'; ctx.fillRect(PAD.left, histY0, cW, histH)
 
   const n = days.length, step = cW / n, barW = Math.max(2, step - 1)
-  const prices = days.map(d => d.price)
+  const prices = days.map(d => d.price).filter(Boolean)
   const minP = Math.min(...prices) * 0.994, maxP = Math.max(...prices) * 1.006
   const pY = p => PAD.top + priceH - ((p - minP) / (maxP - minP)) * priceH
 
-  // TPI background shading (light)
+  // TPI shading
   let tpiStart = null, tpiState = null
   const shadeTpi = (endX, state) => {
     if (tpiStart === null) return
@@ -203,6 +201,7 @@ function drawChart(canvas, days, hoveredIdx) {
   // Price line
   ctx.beginPath(); ctx.strokeStyle = '#f7931a'; ctx.lineWidth = 1.5
   days.forEach((d, i) => {
+    if (!d.price) return
     const x = PAD.left + i * step + step / 2, y = pY(d.price)
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
   })
@@ -212,7 +211,7 @@ function drawChart(canvas, days, hoveredIdx) {
   ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 1
   ctx.beginPath(); ctx.moveTo(PAD.left, zeroY); ctx.lineTo(PAD.left + cW, zeroY); ctx.stroke()
 
-  // Score axis labels
+  // Score labels
   ctx.fillStyle = '#9ca3af'; ctx.font = '9px -apple-system,sans-serif'; ctx.textAlign = 'left'
   ctx.fillText('+6', W - PAD.right + 4, histY0 + 8)
   ctx.fillText(' 0', W - PAD.right + 4, zeroY + 3)
@@ -221,13 +220,10 @@ function drawChart(canvas, days, hoveredIdx) {
   const bScale = (histH / 2) / 6
   days.forEach((d, i) => {
     const x = PAD.left + i * step
-    const alpha = i === hoveredIdx ? 1 : 0.8
-    ctx.globalAlpha = alpha
-    if (d.longScore > 0)  { ctx.fillStyle = '#10b981'; ctx.fillRect(x + 0.5, zeroY - d.longScore * bScale, barW, d.longScore * bScale) }
+    ctx.globalAlpha = i === hoveredIdx ? 1 : 0.8
+    if (d.longScore  > 0) { ctx.fillStyle = '#10b981'; ctx.fillRect(x + 0.5, zeroY - d.longScore  * bScale, barW, d.longScore  * bScale) }
     if (d.shortScore > 0) { ctx.fillStyle = '#ef4444'; ctx.fillRect(x + 0.5, zeroY, barW, d.shortScore * bScale) }
-    if (d.longScore === 0 && d.shortScore === 0) {
-      ctx.fillStyle = '#e5e7eb'; ctx.fillRect(x + 0.5, zeroY - 1, barW, 2)
-    }
+    if (!d.longScore && !d.shortScore) { ctx.fillStyle = '#e5e7eb'; ctx.fillRect(x + 0.5, zeroY - 1, barW, 2) }
     ctx.globalAlpha = 1
   })
 
@@ -245,74 +241,117 @@ function drawChart(canvas, days, hoveredIdx) {
     ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 0.5; ctx.setLineDash([3, 3])
     ctx.beginPath(); ctx.moveTo(x, PAD.top); ctx.lineTo(x, H - PAD.bottom); ctx.stroke()
     ctx.setLineDash([])
-    ctx.beginPath(); ctx.arc(x, pY(days[hoveredIdx].price), 3.5, 0, Math.PI * 2)
-    ctx.fillStyle = '#f7931a'; ctx.fill()
+    if (days[hoveredIdx].price) {
+      ctx.beginPath(); ctx.arc(x, pY(days[hoveredIdx].price), 3.5, 0, Math.PI * 2)
+      ctx.fillStyle = '#f7931a'; ctx.fill()
+    }
   }
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function ChecklistBacktest() {
-  const canvasRef  = useRef(null)
-  const [days,     setDays]    = useState([])
-  const [loading,  setLoading] = useState(true)
-  const [error,    setError]   = useState(null)
-  const [hovered,  setHovered] = useState(null)
-  const [stats,    setStats]   = useState(null)
+  const canvasRef = useRef(null)
+  const [days,    setDays]    = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(null)
+  const [hovered, setHovered] = useState(null)
+  const [stats,   setStats]   = useState(null)
 
   useEffect(() => {
     (async () => {
       try {
-        const { prices, fgMap, fundingMap, oiMap, takerMap, tpiTransitions, storedScores } = await fetchAllData()
+        const { cgPriceMap, fgMap, fundingMap, oiMap, takerMap, klMap, tpiTransitions, storedScores } =
+          await fetchBacktestData()
+
+        // Build sorted date list from kline (most reliable daily date source)
+        // kline returns newest first, reverse for oldest→newest
+        const klDates = Object.keys(klMap).sort()
+
+        // Take last 100 dates we have price data for
+        const allDates = klDates.filter(d => cgPriceMap[d] || klMap[d])
+        const dates    = allDates.slice(-100)
 
         const computed = []
-        for (let i = 1; i < prices.length; i++) {
-          const { date, price } = prices[i]
-          const prevPrice = prices[i - 1].price
 
-          const fg   = fgMap[date] ?? null
+        for (let i = 0; i < dates.length; i++) {
+          const date    = dates[i]
+          const prevDate = dates[i - 1] ?? null
+
+          // ── Price for display
+          const price = cgPriceMap[date] ?? klMap[date]?.close ?? null
+
+          // ── Use stored UTC-close score if available (ground truth)
+          const stored = storedScores[date]
+          if (stored && stored.longScore !== undefined && stored.shortScore !== undefined) {
+            computed.push({
+              date,
+              price: Math.round(price ?? stored.price ?? 0),
+              longScore:  stored.longScore,
+              shortScore: stored.shortScore,
+              fg:         stored.fg    ?? fgMap[date] ?? null,
+              frPct:      stored.frPct ?? null,
+              tpiState:   stored.tpiState ?? interpolateTpi(tpiTransitions, date),
+              takerBuyRatio: null,  // not in stored
+              source:     'stored',
+              available:  stored.tpiAvail ? 6 : 5,  // approximate
+            })
+            continue
+          }
+
+          // ── No stored score — compute from raw data
+          const fg   = fgMap[date]    ?? null
           const fr   = fundingMap[date] ?? null
           const frPct = fr !== null ? fr * 100 : null
           const tpiState = interpolateTpi(tpiTransitions, date)
 
-          // OI: compare today vs previous day
-          const oiCurr = oiMap[date] ?? null
-          const oiPrev = oiMap[prices[i - 1].date] ?? null
+          const oiCurr = oiMap[date]    ?? null
+          const oiPrev = prevDate ? (oiMap[prevDate] ?? null) : null
 
           const takerBuyRatio = takerMap[date] ?? null
 
-          // Dominance: use stored checklist score if available (has server-computed dominance)
-          // Otherwise null
-          const stored = storedScores[date]
-          const domTrend = stored?.dominanceTrend ?? null
+          // Price change: use Bybit kline open→close (same-day, avoids CoinGecko dedup issue)
+          const kl = klMap[date]
+          const priceChangePct = kl ? kl.changePct : null
 
-          const scored = scoreDay({ price, prevPrice, fg, frPct, tpiState, oiPrev, oiCurr, takerBuyRatio, domTrend })
-          computed.push({ date, ...scored })
+          // Dominance: not available historically without CoinGecko paid API
+          const domTrend = null
+
+          const { longScore, shortScore, available } = scoreDay({
+            frPct, fg, tpiState, oiPrev, oiCurr, priceChangePct, takerBuyRatio, domTrend,
+          })
+
+          computed.push({
+            date, price: Math.round(price ?? kl?.close ?? 0),
+            longScore, shortScore, available,
+            fg, frPct, tpiState, takerBuyRatio,
+            priceChangePct: priceChangePct ? parseFloat(priceChangePct.toFixed(2)) : null,
+            source: 'computed',
+          })
         }
 
         setDays(computed)
 
-        // Compute win-rate stats
-        const longSignalDays  = computed.filter(d => d.longScore  >= 4)
-        const shortSignalDays = computed.filter(d => d.shortScore >= 4)
-        const longWins  = longSignalDays.filter((d, i) => {
-          // Did price go up the NEXT day?
-          const nextIdx = computed.indexOf(d) + 1
-          return nextIdx < computed.length && computed[nextIdx].change24h > 0
+        // Win-rate stats
+        const withScore = computed.filter(d => d.longScore + d.shortScore > 0)
+        const longSig   = computed.filter(d => d.longScore  >= 4)
+        const shortSig  = computed.filter(d => d.shortScore >= 4)
+        const longWins  = longSig.filter(d => {
+          const ni = computed.indexOf(d) + 1
+          return ni < computed.length && (computed[ni].priceChangePct ?? 0) > 0
         })
-        const shortWins = shortSignalDays.filter((d, i) => {
-          const nextIdx = computed.indexOf(d) + 1
-          return nextIdx < computed.length && computed[nextIdx].change24h < 0
+        const shortWins = shortSig.filter(d => {
+          const ni = computed.indexOf(d) + 1
+          return ni < computed.length && (computed[ni].priceChangePct ?? 0) < 0
         })
 
+        const storedCount = computed.filter(d => d.source === 'stored').length
         setStats({
-          longSignals:  longSignalDays.length,
-          longWinRate:  longSignalDays.length ? Math.round(longWins.length  / longSignalDays.length  * 100) : null,
-          shortSignals: shortSignalDays.length,
-          shortWinRate: shortSignalDays.length ? Math.round(shortWins.length / shortSignalDays.length * 100) : null,
-          daysWithAllData: computed.filter(d => d.available === 6).length,
-          total: computed.length,
+          total: computed.length, storedCount,
+          longSignals:  longSig.length,
+          shortSignals: shortSig.length,
+          longWinRate:  longSig.length  ? Math.round(longWins.length  / longSig.length  * 100) : null,
+          shortWinRate: shortSig.length ? Math.round(shortWins.length / shortSig.length * 100) : null,
         })
-
         setError(null)
       } catch(e) { setError(e.message) }
       finally { setLoading(false) }
@@ -328,9 +367,10 @@ export default function ChecklistBacktest() {
   }, [days, hovered])
 
   const hoveredDay = hovered !== null ? days[hovered] : null
-  const bias = hoveredDay
-    ? hoveredDay.longScore > hoveredDay.shortScore ? { text: `LONG ${hoveredDay.longScore}/6`,  color: '#10b981' }
-    : hoveredDay.shortScore > hoveredDay.longScore ? { text: `SHORT ${hoveredDay.shortScore}/6`, color: '#ef4444' }
+  const displayDay = hoveredDay ?? days[days.length - 1]
+  const bias = displayDay
+    ? displayDay.longScore > displayDay.shortScore  ? { text: `LONG ${displayDay.longScore}/6`,  color: '#10b981' }
+    : displayDay.shortScore > displayDay.longScore  ? { text: `SHORT ${displayDay.shortScore}/6`, color: '#ef4444' }
     : { text: 'NEUTRAL', color: '#f59e0b' }
     : null
 
@@ -345,26 +385,26 @@ export default function ChecklistBacktest() {
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+      {/* Subtitle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
         <div style={{ fontSize: 11, color: '#9ca3af' }}>
-          Same 6 conditions as live checklist · Funding · F&G · TPI · OI+Price · BTC Dominance · CVD Taker
+          Same 6 conditions as live checklist · UTC close scores from Redis where available · Bybit kline for historical
         </div>
         {stats && (
           <span style={{ fontSize: 10, color: '#9ca3af' }}>
-            {stats.daysWithAllData}/{stats.total} days with full 6/6 data
+            {stats.storedCount} days from Redis · {stats.total - stats.storedCount} computed
           </span>
         )}
       </div>
 
-      {/* Win rate stat cards */}
+      {/* Win-rate stat cards */}
       {stats && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
           {[
-            { label: 'Long signals (≥4/6)',  value: stats.longSignals,  color: '#10b981', bg: 'rgba(16,185,129,.08)',  border: 'rgba(16,185,129,.2)'  },
-            { label: 'Long next-day hit',    value: stats.longWinRate  !== null ? stats.longWinRate  + '%' : '—', color: '#10b981', bg: 'rgba(16,185,129,.08)',  border: 'rgba(16,185,129,.2)'  },
-            { label: 'Short signals (≥4/6)', value: stats.shortSignals, color: '#ef4444', bg: 'rgba(239,68,68,.08)',   border: 'rgba(239,68,68,.2)'   },
-            { label: 'Short next-day hit',   value: stats.shortWinRate !== null ? stats.shortWinRate + '%' : '—', color: '#ef4444', bg: 'rgba(239,68,68,.08)',   border: 'rgba(239,68,68,.2)'   },
+            { label: 'Long signals (≥4/6)',  value: stats.longSignals,  color: '#10b981', bg: 'rgba(16,185,129,.08)', border: 'rgba(16,185,129,.2)' },
+            { label: 'Long next-day hit%',   value: stats.longWinRate  !== null ? stats.longWinRate  + '%' : '—', color: '#10b981', bg: 'rgba(16,185,129,.08)', border: 'rgba(16,185,129,.2)' },
+            { label: 'Short signals (≥4/6)', value: stats.shortSignals, color: '#ef4444', bg: 'rgba(239,68,68,.08)',  border: 'rgba(239,68,68,.2)'  },
+            { label: 'Short next-day hit%',  value: stats.shortWinRate !== null ? stats.shortWinRate + '%' : '—', color: '#ef4444', bg: 'rgba(239,68,68,.08)',  border: 'rgba(239,68,68,.2)'  },
           ].map(s => (
             <div key={s.label} style={{ padding: '10px 14px', borderRadius: 10, background: s.bg, border: `1px solid ${s.border}` }}>
               <div style={{ ...LBL, marginBottom: 4 }}>{s.label}</div>
@@ -375,31 +415,44 @@ export default function ChecklistBacktest() {
       )}
 
       {loading && <div style={{ ...LBL, color: '#d1d5db', padding: '3rem 0', textAlign: 'center' }}>Loading 100 days…</div>}
-      {error   && <div style={{ fontSize: 12, color: '#dc2626', padding: '8px 0' }}>Error: {error}</div>}
+      {error   && <div style={{ fontSize: 12, color: '#dc2626' }}>Error: {error}</div>}
 
       {!loading && !error && days.length > 0 && (
         <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)' }}>
 
-          {/* Hover info bar */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 16px', borderBottom: '1px solid #f3f4f6', minHeight: 40, flexWrap: 'wrap' }}>
-            {hoveredDay ? (
+          {/* Info bar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 16px', borderBottom: '1px solid #f3f4f6', minHeight: 42, flexWrap: 'wrap' }}>
+            {displayDay ? (
               <>
-                <span style={{ ...LBL, textTransform: 'none' }}>{hoveredDay.date}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#f7931a' }}>${hoveredDay.price.toLocaleString()}</span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: hoveredDay.change24h >= 0 ? '#10b981' : '#ef4444' }}>
-                  {hoveredDay.change24h >= 0 ? '+' : ''}{hoveredDay.change24h}%
+                <span style={{ ...LBL, textTransform: 'none' }}>
+                  {displayDay.date}{hoveredDay ? '' : ' (today)'}
                 </span>
-                {hoveredDay.fg    !== null && <span style={{ fontSize: 11, color: '#6b7280' }}>F&G {hoveredDay.fg}</span>}
-                {hoveredDay.frPct !== null && <span style={{ fontSize: 11, color: '#6b7280' }}>FR {hoveredDay.frPct >= 0 ? '+' : ''}{hoveredDay.frPct.toFixed(4)}%</span>}
-                {hoveredDay.tpiState && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: hoveredDay.tpiState === 'LONG' ? '#10b981' : '#ef4444' }}>
-                    TPI {hoveredDay.tpiState}
+                {displayDay.price > 0 && (
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#f7931a' }}>
+                    ${displayDay.price.toLocaleString()}
                   </span>
                 )}
-                {hoveredDay.takerBuyRatio !== null && <span style={{ fontSize: 11, color: '#6b7280' }}>CVD {hoveredDay.takerBuyRatio.toFixed(1)}%</span>}
-                <span style={{ fontSize: 11, color: '#d1d5db' }}>{hoveredDay.available}/6 signals</span>
+                {displayDay.priceChangePct !== null && displayDay.priceChangePct !== undefined && (
+                  <span style={{ fontSize: 12, fontWeight: 600, color: displayDay.priceChangePct >= 0 ? '#10b981' : '#ef4444' }}>
+                    {displayDay.priceChangePct >= 0 ? '+' : ''}{displayDay.priceChangePct}%
+                  </span>
+                )}
+                {displayDay.fg !== null && <span style={{ fontSize: 11, color: '#6b7280' }}>F&G {displayDay.fg}</span>}
+                {displayDay.frPct !== null && (
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>FR {displayDay.frPct >= 0 ? '+' : ''}{displayDay.frPct.toFixed(4)}%</span>
+                )}
+                {displayDay.tpiState && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: displayDay.tpiState === 'LONG' ? '#10b981' : '#ef4444' }}>
+                    TPI {displayDay.tpiState}
+                  </span>
+                )}
+                <span style={{ fontSize: 11, color: '#d1d5db' }}>
+                  {displayDay.source === 'stored' ? '● Redis' : '● computed'}
+                </span>
                 {bias && (
-                  <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 800, color: bias.color }}>{bias.text}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 14, fontWeight: 800, color: bias.color }}>
+                    {bias.text}
+                  </span>
                 )}
               </>
             ) : (
@@ -416,30 +469,30 @@ export default function ChecklistBacktest() {
           />
 
           {/* Legend */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 16px', borderTop: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 16px', borderTop: '1px solid #f3f4f6', flexWrap: 'wrap' }}>
             {[
-              { color: '#f7931a', label: 'BTC price' },
-              { color: '#10b981', label: 'Long score (above 0)' },
-              { color: '#ef4444', label: 'Short score (below 0)' },
+              { color: '#f7931a',             label: 'BTC price' },
+              { color: '#10b981',             label: 'Long score' },
+              { color: '#ef4444',             label: 'Short score' },
               { color: 'rgba(16,185,129,.2)', label: 'TPI LONG zone' },
               { color: 'rgba(239,68,68,.2)',  label: 'TPI SHORT zone' },
             ].map(l => (
               <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: l.color, display: 'inline-block', border: '1px solid #e5e7eb', boxSizing: 'border-box' }} />
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: l.color, display: 'inline-block' }} />
                 <span style={{ fontSize: 10, color: '#9ca3af' }}>{l.label}</span>
               </div>
             ))}
             <span style={{ fontSize: 10, color: '#d1d5db', marginLeft: 'auto' }}>
-              Sources: CoinGecko · Alternative.me · Bybit · TradingView webhook
+              Bars above zero line = long score · below = short score
             </span>
           </div>
         </div>
       )}
 
-      {/* Improvement note */}
       <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af', lineHeight: 1.5 }}>
-        <span style={{ fontWeight: 600, color: '#6b7280' }}>Dominance (C5):</span> uses stored server-computed values where available; earlier dates may show as unavailable.
-        {' '}<span style={{ fontWeight: 600, color: '#6b7280' }}>Win rate:</span> next-day price direction when signal strength ≥ 4/6.
+        <span style={{ fontWeight: 600, color: '#6b7280' }}>Today's score</span> is set at UTC close by the cron and matches the live checklist.
+        Historical dominance (C5) is only available from when Redis storage started — earlier days show C5 as unavailable.
+        <span style={{ fontWeight: 600, color: '#6b7280' }}> Win rate</span> = next-day price direction when signal ≥4/6.
       </div>
     </div>
   )
