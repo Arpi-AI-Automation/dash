@@ -1,6 +1,9 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
+// ── Friction: same calibration as System 1 ────────────────────────────────────
+const REBALANCE_COST = 0.9934  // 0.66% per rebalance — calibrated to match TradingView
+
 const ASSETS = [
   { key: 'bnb',  label: 'BNB',  color: '#f3ba2f' },
   { key: 'eth',  label: 'ETH',  color: '#627eea' },
@@ -27,6 +30,11 @@ function assetKey(tvAsset) {
   return 'usd'
 }
 
+function isCash(s2) {
+  // Cash = asset is USD (regardless of alloc values)
+  return assetKey(s2?.asset) === 'usd'
+}
+
 function fmtDate(iso) {
   if (!iso) return null
   return new Date(iso).toUTCString().slice(0, 16)
@@ -38,6 +46,7 @@ const LBL = {
   textTransform: 'uppercase', letterSpacing: '0.06em',
 }
 
+// ── Equity canvas with friction applied at each transition ────────────────────
 function EquityCanvas({ history, transitions }) {
   const canvasRef = useRef(null)
 
@@ -47,7 +56,8 @@ function EquityCanvas({ history, transitions }) {
     const ctx    = canvas.getContext('2d')
     const dpr    = window.devicePixelRatio || 1
     const W = canvas.clientWidth, H = canvas.clientHeight
-    canvas.width = W * dpr; canvas.height = H * dpr
+    if (W === 0 || H === 0) return
+    canvas.width  = W * dpr; canvas.height = H * dpr
     ctx.scale(dpr, dpr)
 
     const dayMap = {}
@@ -59,6 +69,8 @@ function EquityCanvas({ history, transitions }) {
     if (pts.length < 2) return
 
     const sortedT = [...(transitions || [])].sort((a, b) => a.date.localeCompare(b.date))
+
+    // dateAssetMap for segment colouring
     const dateAssetMap = {}
     for (let i = 0; i < sortedT.length; i++) {
       const tDate  = sortedT[i].date
@@ -69,16 +81,32 @@ function EquityCanvas({ history, transitions }) {
     const dateToIdx = {}
     pts.forEach((p, i) => { dateToIdx[p.date] = i })
 
-    const eqNorm = pts.map(p => p.equity ?? null)
-    if (eqNorm.every(v => v === null)) eqNorm.fill(1.0)
-    else for (let i = 1; i < eqNorm.length; i++) { if (eqNorm[i] === null) eqNorm[i] = eqNorm[i - 1] ?? 1.0 }
+    // Raw equity from stored values (forward-fill nulls)
+    const rawEq = pts.map(p => p.equity ?? null)
+    if (rawEq.every(v => v === null)) rawEq.fill(1.0)
+    else for (let i = 1; i < rawEq.length; i++) { if (rawEq[i] === null) rawEq[i] = rawEq[i-1] ?? 1.0 }
 
-    const pad = { t: 12, r: 56, b: 26, l: 46 }
+    // Rotation indices (skip index 0 = starting point)
+    const rotIdxSet = new Set()
+    sortedT.slice(1).forEach(t => {
+      const idx = dateToIdx[t.date]
+      if (idx != null) rotIdxSet.add(idx)
+    })
+
+    // Apply friction at each rotation
+    const eqNorm = new Array(pts.length)
+    let frictionMult = 1.0
+    for (let i = 0; i < pts.length; i++) {
+      if (rotIdxSet.has(i)) frictionMult *= REBALANCE_COST
+      eqNorm[i] = rawEq[i] * frictionMult
+    }
+
+    const pad = { t: 12, r: 58, b: 26, l: 46 }
     const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b
     ctx.clearRect(0, 0, W, H)
     ctx.fillStyle = '#f9fafb'; ctx.fillRect(pad.l, pad.t, cw, ch)
 
-    const eqValid = eqNorm.filter(Boolean)
+    const eqValid = eqNorm.filter(v => v != null && isFinite(v))
     const minEq = Math.min(...eqValid) * 0.97, maxEq = Math.max(...eqValid) * 1.03
     const rangeEq = maxEq - minEq || 1
     const eX = i => pad.l + (cw * i) / (pts.length - 1)
@@ -106,9 +134,12 @@ function EquityCanvas({ history, transitions }) {
       ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke()
     }
     for (let i = 1; i <= pts.length; i++) {
-      const prev = dateAssetMap[pts[i - 1]?.date] ?? 'usd'
+      const prev = dateAssetMap[pts[i-1]?.date] ?? 'usd'
       const cur  = i < pts.length ? (dateAssetMap[pts[i]?.date] ?? 'usd') : null
-      if (cur !== prev || i === pts.length) { drawSeg(segStart, i - 1, ASSET_COLOR[prev] ?? '#8b5cf6'); segStart = i - 1 }
+      if (cur !== prev || i === pts.length) {
+        drawSeg(segStart, i - 1, ASSET_COLOR[prev] ?? '#8b5cf6')
+        segStart = i - 1
+      }
     }
 
     sortedT.slice(1).forEach(t => {
@@ -153,22 +184,32 @@ export default function RotationChart2() {
   const scores      = s2?.scores
   const alloc       = s2?.alloc
   const currentKey  = assetKey(s2?.asset)
+  const cash        = s2 ? isCash(s2) : false
 
-  // Active keys: those with alloc > 0, or the single currentKey if no alloc
-  const activeKeys = alloc
-    ? new Set(Object.entries(alloc).filter(([, v]) => v > 0).map(([k]) => k))
-    : new Set([currentKey])
+  // Active keys: alloc > 0, or USD if cash signal
+  const activeKeys = cash
+    ? new Set(['usd'])
+    : alloc
+      ? new Set(Object.entries(alloc).filter(([, v]) => v > 0).map(([k]) => k))
+      : new Set([currentKey])
 
-  const sortedAssets = (scores || alloc)
-    ? [...ASSETS].sort((a, b) => {
-        const aV = scores ? (scores[a.key] ?? 0) : (alloc?.[a.key] ?? 0)
-        const bV = scores ? (scores[b.key] ?? 0) : (alloc?.[b.key] ?? 0)
-        return bV - aV
-      })
-    : ASSETS
+  // Sort assets for score bars
+  // For cash: all scores are 0, sort by label alphabetically (no meaningful order)
+  // For active: sort by score desc
+  const allZeroScores = scores && Object.values(scores).every(v => v === 0)
+  const sortedAssets = (scores && !allZeroScores)
+    ? [...ASSETS].sort((a, b) => (scores[b.key] ?? 0) - (scores[a.key] ?? 0))
+    : alloc
+      ? [...ASSETS].sort((a, b) => (alloc[b.key] ?? 0) - (alloc[a.key] ?? 0))
+      : ASSETS
+
+  // Rotation count for friction note
+  const rotationCount = transitions.length > 1 ? transitions.length - 1 : 0
+  const frictionPct   = (1 - Math.pow(REBALANCE_COST, rotationCount)) * 100
 
   return (
     <div style={{ background: '#fff', border: '1px solid #d1d5db', borderRadius: 12, boxShadow: '0 4px 6px -1px rgba(0,0,0,.08)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
       {/* ── Header ── */}
       <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid #f3f4f6' }}>
 
@@ -182,12 +223,24 @@ export default function RotationChart2() {
           </span>
         </div>
 
-        {/* Row 2: label + current signal pills — SAME LINE (mirrors S1) */}
+        {/* Row 2: Current signal — handles cash, alloc, and no-signal states */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
           <span style={LBL}>Current signal</span>
+
           {!s2 ? (
-            <span style={{ ...LBL, color: '#d1d5db', textTransform: 'none', fontWeight: 400 }}>awaiting webhook</span>
-          ) : alloc ? (
+            <span style={{ ...LBL, color: '#d1d5db', textTransform: 'none', fontWeight: 400 }}>
+              awaiting webhook
+            </span>
+          ) : cash ? (
+            // Cash / USD — all-zero alloc is valid, show USD pill explicitly
+            <span style={{
+              fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 20,
+              background: '#6b728018', color: '#6b7280', border: '1px solid rgba(107,114,128,.3)',
+            }}>
+              USD <span style={{ fontSize: 11, opacity: .75 }}>100%</span>
+            </span>
+          ) : alloc && Object.values(alloc).some(v => v > 0) ? (
+            // Active allocation pills
             ASSETS.filter(a => (alloc[a.key] ?? 0) > 0).map(a => (
               <span key={a.key} style={{
                 fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 20,
@@ -197,6 +250,7 @@ export default function RotationChart2() {
               </span>
             ))
           ) : (
+            // Fallback: show asset from signal
             <span style={{
               fontSize: 13, fontWeight: 700, padding: '3px 12px', borderRadius: 20,
               background: (ASSET_COLOR[currentKey] ?? '#9ca3af') + '18',
@@ -208,14 +262,16 @@ export default function RotationChart2() {
           )}
         </div>
 
-        {/* Row 3: asset legend */}
+        {/* Row 3: legend dots */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px 12px' }}>
           {ASSETS.map(a => {
             const isActive = activeKeys.has(a.key)
             return (
               <div key={a.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: a.color, display: 'inline-block', opacity: isActive ? 1 : 0.35 }} />
-                <span style={{ fontSize: 11, color: isActive ? a.color : '#9ca3af', fontWeight: isActive ? 700 : 400 }}>{a.label}</span>
+                <span style={{ fontSize: 11, color: isActive ? a.color : '#9ca3af', fontWeight: isActive ? 700 : 400 }}>
+                  {a.label}
+                </span>
               </div>
             )
           })}
@@ -223,8 +279,15 @@ export default function RotationChart2() {
       </div>
 
       {/* ── Equity curve ── */}
-      <div style={{ padding: '1rem 1.25rem .75rem' }}>
-        <div style={{ ...LBL, marginBottom: 8 }}>Rotation equity · dots = asset changes</div>
+      <div style={{ padding: '1rem 1.25rem .5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 4 }}>
+          <span style={LBL}>Rotation equity · dots = rebalance points</span>
+          {rotationCount > 0 && (
+            <span style={{ fontSize: 10, color: '#9ca3af' }}>
+              {rotationCount} rebalance{rotationCount > 1 ? 's' : ''} · −{frictionPct.toFixed(1)}% friction (0.66%/rebalance, calibrated to TV)
+            </span>
+          )}
+        </div>
         {history.length > 1 && transitions.length > 0 ? (
           <EquityCanvas history={history} transitions={transitions} />
         ) : (
@@ -234,40 +297,67 @@ export default function RotationChart2() {
         )}
       </div>
 
+      {/* Friction note */}
+      <div style={{ padding: '0 1.25rem .75rem' }}>
+        <span style={{ fontSize: 10, color: '#d1d5db' }}>
+          Friction-adjusted · raw stored equity = {
+            history.filter(p => p.equity != null).slice(-1)[0]?.equity?.toFixed(3) ?? '—'
+          }x
+        </span>
+      </div>
+
       {/* ── Score bars ── */}
       {scores && (
         <div style={{ padding: '.75rem 1.25rem 1rem', borderTop: '1px solid #f3f4f6' }}>
           <div style={{ ...LBL, marginBottom: 10 }}>Relative strength scores</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {sortedAssets.map(asset => {
-              const score    = scores[asset.key] ?? 0
-              const maxAbs   = Math.max(...Object.values(scores).map(Math.abs), 1)
-              const isActive = activeKeys.has(asset.key)
-              const barColor = score < 0 ? '#ef4444' : asset.color
-              return (
-                <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, width: 34, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#9ca3af' }}>{asset.label}</span>
-                  <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
-                    <div style={{ width: `${(Math.abs(score) / maxAbs) * 100}%`, height: '100%', background: barColor, opacity: isActive ? 1 : 0.35, borderRadius: 9999, transition: 'width .5s' }} />
-                  </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, width: 28, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#d1d5db' }}>
-                    {score > 0 ? '+' : ''}{score}
-                  </span>
-                  {alloc && (
-                    <span style={{ fontSize: 11, fontWeight: 700, width: 32, textAlign: 'right', flexShrink: 0, color: (alloc[asset.key] ?? 0) > 0 ? asset.color : '#d1d5db' }}>
-                      {alloc[asset.key] ?? 0}%
+
+          {/* Cash state: all scores zero → show explicit cash message */}
+          {allZeroScores ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '6px 14px', borderRadius: 20,
+                background: 'rgba(107,114,128,.08)', border: '1px solid rgba(107,114,128,.2)',
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#6b7280', display: 'inline-block' }} />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#6b7280' }}>CASH 100%</span>
+              </div>
+              <span style={{ fontSize: 11, color: '#9ca3af' }}>No asset positions — all scores neutral</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {sortedAssets.map(asset => {
+                const score    = scores[asset.key] ?? 0
+                const maxAbs   = Math.max(...Object.values(scores).map(Math.abs), 1)
+                const isActive = activeKeys.has(asset.key)
+                const barColor = score < 0 ? '#ef4444' : asset.color
+                return (
+                  <div key={asset.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, width: 34, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#9ca3af' }}>
+                      {asset.label}
                     </span>
-                  )}
-                  {isActive && <span style={{ fontSize: 11, color: asset.color, flexShrink: 0 }}>←</span>}
-                </div>
-              )
-            })}
-          </div>
+                    <div style={{ flex: 1, height: 4, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
+                      <div style={{ width: `${(Math.abs(score) / maxAbs) * 100}%`, height: '100%', background: barColor, opacity: isActive ? 1 : 0.35, borderRadius: 9999, transition: 'width .5s' }} />
+                    </div>
+                    <span style={{ fontSize: 11, fontWeight: 700, width: 28, textAlign: 'right', flexShrink: 0, color: isActive ? asset.color : '#d1d5db' }}>
+                      {score > 0 ? '+' : ''}{score}
+                    </span>
+                    {alloc && (
+                      <span style={{ fontSize: 11, fontWeight: 700, width: 32, textAlign: 'right', flexShrink: 0, color: (alloc[asset.key] ?? 0) > 0 ? asset.color : '#d1d5db' }}>
+                        {alloc[asset.key] ?? 0}%
+                      </span>
+                    )}
+                    {isActive && <span style={{ fontSize: 11, color: asset.color, flexShrink: 0 }}>←</span>}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Alloc only, no scores */}
-      {!scores && alloc && (
+      {/* Alloc only (no scores) */}
+      {!scores && alloc && !cash && Object.values(alloc).some(v => v > 0) && (
         <div style={{ padding: '.75rem 1.25rem 1rem', borderTop: '1px solid #f3f4f6' }}>
           <div style={{ ...LBL, marginBottom: 10 }}>Allocation</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
