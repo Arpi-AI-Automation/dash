@@ -224,28 +224,6 @@ function CombinedChart({ btcHistory, vi1History, vi2History }) {
 
   return (
     <div>
-      {/* Hover info bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, minHeight: 22, flexWrap: 'wrap' }}>
-        <span style={{ ...LBL, textTransform: 'none' }}>{hDate}</span>
-        {hBtc != null && (
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>
-            BTC ${hBtc.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-          </span>
-        )}
-        {hVi1 != null && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#f59e0b' }}>
-            VI-1 {hVi1 >= 0 ? '+' : ''}{hVi1.toFixed(3)}
-            <span style={{ color: '#f59e0b', marginLeft: 4, fontSize: 11 }}>{viZone(hVi1)}</span>
-          </span>
-        )}
-        {hVi2 != null && (
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#818cf8' }}>
-            VI-2 {hVi2 >= 0 ? '+' : ''}{hVi2.toFixed(3)}
-            <span style={{ color: '#818cf8', marginLeft: 4, fontSize: 11 }}>{viZone(hVi2)}</span>
-          </span>
-        )}
-      </div>
-
       {/* Canvas */}
       <canvas
         ref={canvasRef}
@@ -258,11 +236,11 @@ function CombinedChart({ btcHistory, vi1History, vi2History }) {
       <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6b7280' }}>
           <span style={{ display: 'inline-block', width: 16, height: 2, background: '#f59e0b', borderRadius: 2 }} />
-          Short-term VI-1
+          Short Term Valuation
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6b7280' }}>
           <span style={{ display: 'inline-block', width: 16, height: 2, background: '#818cf8', borderRadius: 2 }} />
-          Full-cycle VI-2
+          SDCA Full Cycle Valuation
         </span>
         <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
           Zones: <span style={{ color: '#059669' }}>deep value &lt;−2</span> · <span style={{ color: '#f59e0b' }}>neutral −1 to +1</span> · <span style={{ color: '#dc2626' }}>overbought &gt;+2</span>
@@ -333,8 +311,8 @@ export default function ValuationIndex() {
     <div>
       {/* Current readings — compact gauge row */}
       <div style={{ marginBottom: '1rem' }}>
-        <GaugeRow label="Short-term VI-1" signal={vi}  color="#f59e0b" />
-        <GaugeRow label="Full-cycle VI-2"  signal={vi2} color="#818cf8" />
+        <GaugeRow label="Short Term Valuation" signal={vi}  color="#f59e0b" />
+        <GaugeRow label="SDCA Full Cycle Valuation" signal={vi2} color="#818cf8" />
       </div>
 
       {/* Combined time series chart */}
