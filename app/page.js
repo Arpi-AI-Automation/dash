@@ -50,7 +50,7 @@ export default function Home() {
       <main style={{ padding: '1.5rem', maxWidth: 1400, margin: '0 auto' }}>
 
         {/* ROW 1 — Executive Summary + BTC Chart */}
-        <div style={{ display: 'grid', gridTemplateColumns: '30fr 70fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '30fr 70fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'stretch' }}>
           <div style={cardBlue}>
             <span style={LABEL}>Executive Summary</span>
             <DailyBrief />
