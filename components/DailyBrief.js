@@ -128,26 +128,44 @@ export default function DailyBrief() {
         setFg7d(list[7]    ? parseInt(list[7].value) : null)
       }).catch(() => {})
 
-    // Bybit: OI delta + funding rate
-    Promise.all([
-      fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT').then(r=>r.json()),
-      fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=2').then(r=>r.json()),
-    ]).then(([ticker, oi]) => {
-      const t = ticker.result?.list?.[0]
-      if (t) {
-        const fr = parseFloat(t.fundingRate) * 100
-        setFrPct(fr)
-        setPriceUp(parseFloat(t.price24hPcnt) > 0)
-      }
-      const list = oi.result?.list ?? []
-      if (list.length >= 2) {
-        setOiRising(parseFloat(list[0].openInterest) > parseFloat(list[1].openInterest))
-      }
-    }).catch(() => {})
+    // Bybit: OI delta + funding rate — then pass to /api/checklist (same as DecisionChecklist)
+    ;(async () => {
+      try {
+        const [tickerRes, oiRes, takerRes] = await Promise.all([
+          fetch('https://api.bybit.com/v5/market/tickers?category=linear&symbol=BTCUSDT'),
+          fetch('https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1d&limit=2'),
+          fetch('https://api.bybit.com/v5/market/account-ratio?category=linear&symbol=BTCUSDT&period=1d&limit=1'),
+        ])
+        const [ticker, oi, taker] = await Promise.all([tickerRes.json(), oiRes.json(), takerRes.json()])
 
-    // Checklist (server-side, no Bybit params needed for the summary label)
-    fetch('/api/checklist')
-      .then(r => r.json()).then(setChecklist).catch(() => {})
+        const t    = ticker.result?.list?.[0]
+        const fr   = t ? parseFloat(t.fundingRate)  : null
+        const p24h = t ? parseFloat(t.price24hPcnt) : null
+
+        if (t) {
+          setFrPct(fr * 100)
+          setPriceUp(p24h > 0)
+        }
+
+        const oiList = oi.result?.list ?? []
+        const oiCurr = oiList[0] ? parseFloat(oiList[0].openInterest) : null
+        const oiPrev = oiList[1] ? parseFloat(oiList[1].openInterest) : null
+        if (oiCurr !== null && oiPrev !== null) setOiRising(oiCurr > oiPrev)
+
+        const takerBuyRatio = taker.result?.list?.[0] ? parseFloat(taker.result.list[0].buyRatio) * 100 : null
+
+        // Build params — identical to DecisionChecklist
+        const params = new URLSearchParams()
+        if (fr   !== null) params.set('fundingRate',   fr.toFixed(8))
+        if (p24h !== null) params.set('price24hPcnt',  p24h.toFixed(6))
+        if (oiCurr !== null) params.set('oiCurr',      oiCurr.toFixed(2))
+        if (oiPrev !== null) params.set('oiPrev',       oiPrev.toFixed(2))
+        if (takerBuyRatio !== null) params.set('takerBuyRatio', takerBuyRatio.toFixed(4))
+
+        const cl = await fetch(`/api/checklist?${params}`, { cache: 'no-store' }).then(r => r.json())
+        if (cl.ok) setChecklist(cl)
+      } catch (_) {}
+    })()
   }, [])
 
   if (loading) return (
