@@ -107,8 +107,8 @@ export default function Home() {
         </div>
 
         {/* ROW 9 — Backtest */}
-        <div style={{ ...cardPurple, marginBottom: '1.25rem' }}>
-          <span style={LABEL}>Checklist Backtest · 100 Days</span>
+        <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Checklist Backtest · 100 Days</div>
           <ChecklistBacktest />
         </div>
 
