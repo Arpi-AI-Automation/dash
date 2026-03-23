@@ -320,13 +320,8 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
       </div>
 
       {/* T2 — Aroon(34) */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
         <SignalPill signal={t2?.signal} label="T2" />
-        {t2 && (
-          <span style={{ fontSize: 9, color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>
-            {t2.up}↑ {t2.down}↓
-          </span>
-        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center' }}><RSIBar rsi={rsi} /></div>
