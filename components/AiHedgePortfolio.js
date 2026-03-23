@@ -219,12 +219,17 @@ function Sparkline({ data, color, width = 80, height = 30 }) {
 
 function RSIBar({ rsi }) {
   if (rsi == null) return <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>
-  const color = rsi >= 70 ? '#dc2626' : rsi >= 55 ? '#f59e0b' : rsi <= 30 ? '#059669' : '#6b7280'
+  // Threshold: >50 = uptrend (green), <50 = downtrend (red), 48-52 = neutral (grey)
+  const color = rsi > 52 ? '#059669' : rsi < 48 ? '#dc2626' : '#6b7280'
+  const label = rsi > 52 ? 'Up' : rsi < 48 ? 'Dn' : '—'
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
       <span style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{rsi}</span>
-      <div style={{ width: 44, height: 3, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
-        <div style={{ width: `${rsi}%`, height: '100%', background: color, borderRadius: 9999 }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+        <div style={{ width: 36, height: 3, background: '#e5e7eb', borderRadius: 9999, overflow: 'hidden' }}>
+          <div style={{ width: `${Math.min(rsi, 100)}%`, height: '100%', background: color, borderRadius: 9999 }} />
+        </div>
+        <span style={{ fontSize: 9, fontWeight: 700, color }}>{label}</span>
       </div>
     </div>
   )
@@ -244,7 +249,7 @@ function EMADevDisplay({ v }) {
 
 // ── Column grid ───────────────────────────────────────────────────────────────
 // Added Verdict column at the end; removed right-side T1VerdictPanel
-const COLS = '52px 96px 72px 68px 72px 58px 44px 44px 78px 78px 52px 68px 76px 120px'
+const COLS = '0.5fr 1.2fr 0.9fr 0.7fr 0.8fr 0.7fr 0.6fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr 0.85fr 1.4fr'
 
 function HeaderRow() {
   const cols = [
@@ -258,7 +263,7 @@ function HeaderRow() {
     { label: 'Rank',     align: 'center' },
     { label: 'TPI 1',    align: 'center', tip: 'T1: EMA(12) ≥ EMA(21) → Positive. EMA(12) < EMA(21) → Negative.' },
     { label: 'TPI 2',    align: 'center', tip: 'T2: Aroon(34). Up > Down → Positive momentum. Up < Down → Negative.' },
-    { label: 'RSI',      align: 'center', tip: 'Smoothed RSI: RSI(7) with EMA(14) applied. >70 overbought, <30 oversold.' },
+    { label: 'RSI',      align: 'center', tip: 'Smoothed RSI: RSI(7) with EMA(14) applied. >50 = uptrend, <50 = downtrend. 50 is the key threshold.' },
     { label: '30D Sharpe', align: 'center', tip: '30D annualised Sharpe ratio. >1.5 strong · >0.5 ok · <0 poor.' },
     { label: 'EMA(20) dev', align: 'center', tip: '% above/below the 20-day exponential moving average. Positive = extended above, risk of mean reversion.' },
     { label: 'Verdict',  align: 'center', tip: '🚀 Ripping: T1+T2 positive, RSI>55, EMA dev>0, DD>-5% | Positive Trend: T1+T2 both positive | Neutral: mixed | Negative Trend: T1+T2 both negative | 💀 Cooked: T1+T2 negative, RSI<45, EMA dev<-5%, DD<-20%' },
