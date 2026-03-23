@@ -191,7 +191,7 @@ function CombinedChart({ history, transitions }) {
     })
   }, [history, transitions])
 
-  return <canvas ref={canvasRef} style={{ width: '100%', height: 280, display: 'block', borderRadius: 6 }} />
+  return <canvas ref={canvasRef} style={{ width: '100%', height: 420, display: 'block', borderRadius: 6 }} />
 }
 
 // ─── Shared data hook ─────────────────────────────────────────────────────────
