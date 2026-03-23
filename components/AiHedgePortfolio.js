@@ -192,25 +192,25 @@ function calcAroonDaysInTrend(sparkHigh, sparkLow, length = 34) {
 // Neutral:        T1/T2 mixed or insufficient data
 // Negative Trend: T1+T2 both NEGATIVE
 // Cooked:         T1+T2 both NEGATIVE, RSI < 45, EMA dev < -5, DD < -20%
-function calcVerdict(t1, t2signal, rsi, drawdown, adx) {
+function calcVerdict(t1, t2signal, rsi, adx) {
   if (!t1 || !t2signal) return 'NEUTRAL'
 
   const bothPositive = t1 === 'POSITIVE' && t2signal === 'POSITIVE'
   const bothNegative = t1 === 'NEGATIVE' && t2signal === 'NEGATIVE'
 
   if (bothPositive) {
-    const trendStrong = adx      != null ? adx      > 25 : true
-    const rsiUptrend  = rsi      != null ? rsi      > 52 : true
-    const notTooDeep  = drawdown != null ? drawdown > -5 : true
-    if (trendStrong && rsiUptrend && notTooDeep) return 'RIPPING'
+    // RIPPING: strong trend (ADX > 25) + RSI in uptrend (> 52)
+    const trendStrong = adx != null ? adx > 25 : true
+    const rsiUptrend  = rsi != null ? rsi > 52 : true
+    if (trendStrong && rsiUptrend) return 'RIPPING'
     return 'POSITIVE TREND'
   }
 
   if (bothNegative) {
-    const trendStrong = adx      != null ? adx      > 25  : false
-    const rsiDowntrend= rsi      != null ? rsi      < 48  : false
-    const deepDD      = drawdown != null ? drawdown < -20 : false
-    if (trendStrong && rsiDowntrend && deepDD) return 'COOKED'
+    // COOKED: strong trend (ADX > 25) + RSI in downtrend (< 48)
+    const trendStrong  = adx != null ? adx > 25 : false
+    const rsiDowntrend = rsi != null ? rsi < 48 : false
+    if (trendStrong && rsiDowntrend) return 'COOKED'
     return 'NEGATIVE TREND'
   }
 
@@ -476,7 +476,7 @@ export default function AiHedgePortfolio() {
 
           t1[sym] = t1Val
           t2[sym] = t2Val
-          v[sym]  = calcVerdict(t1Val, t2Val?.signal, rsiVal, d.drawdown, adxVal)
+          v[sym]  = calcVerdict(t1Val, t2Val?.signal, rsiVal, adxVal)
         })
       }
 
