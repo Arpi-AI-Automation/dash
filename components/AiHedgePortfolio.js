@@ -64,16 +64,34 @@ function calcT2(sparkHigh, sparkLow, length = 34) {
   }
 }
 
-function calcRSI(prices, period = 14) {
-  if (!prices || prices.length < period + 1) return null
-  let gains = 0, losses = 0
-  for (let i = prices.length - period; i < prices.length; i++) {
-    const d = prices[i] - prices[i - 1]
-    if (d > 0) gains += d; else losses -= d
+// RSI(7) smoothed with EMA(14) — as specified
+// Step 1: compute RSI(7) for each bar from index 7 onwards
+// Step 2: apply EMA(14) to that RSI series → return final EMA value
+function calcRSISmoothed(prices, rsiPeriod = 7, emaPeriod = 14) {
+  if (!prices || prices.length < rsiPeriod + emaPeriod + 1) return null
+
+  // Build RSI series for all valid bars
+  const rsiSeries = []
+  for (let i = rsiPeriod; i < prices.length; i++) {
+    let gains = 0, losses = 0
+    for (let j = i - rsiPeriod + 1; j <= i; j++) {
+      const d = prices[j] - prices[j - 1]
+      if (d > 0) gains += d; else losses -= d
+    }
+    const avgGain = gains / rsiPeriod
+    const avgLoss = losses / rsiPeriod
+    if (avgLoss === 0) { rsiSeries.push(100); continue }
+    rsiSeries.push(100 - 100 / (1 + avgGain / avgLoss))
   }
-  const avgGain = gains / period, avgLoss = losses / period
-  if (avgLoss === 0) return 100
-  return parseFloat((100 - 100 / (1 + avgGain / avgLoss)).toFixed(1))
+
+  if (rsiSeries.length < emaPeriod) return null
+
+  // EMA(14) of the RSI series
+  const k = 2 / (emaPeriod + 1)
+  let ema = rsiSeries.slice(0, emaPeriod).reduce((s, v) => s + v, 0) / emaPeriod
+  for (let i = emaPeriod; i < rsiSeries.length; i++) ema = rsiSeries[i] * k + ema * (1 - k)
+
+  return parseFloat(ema.toFixed(1))
 }
 
 function calcSharpe(prices, riskFreeDaily = 0.00014) {
@@ -156,7 +174,7 @@ function SignalPill({ signal, label }) {
       background: isPos ? 'rgba(16,185,129,.1)' : 'rgba(239,68,68,.1)',
       border: `1px solid ${isPos ? 'rgba(16,185,129,.25)' : 'rgba(239,68,68,.25)'}`,
       borderRadius: 20, padding: '2px 7px',
-    }}>{label} {isPos ? '↑' : '↓'}</span>
+    }}>{isPos ? 'Positive' : 'Negative'}</span>
   )
 }
 
@@ -226,7 +244,7 @@ function EMADevDisplay({ v }) {
 
 // ── Column grid ───────────────────────────────────────────────────────────────
 // Added Verdict column at the end; removed right-side T1VerdictPanel
-const COLS = '52px 96px 72px 68px 60px 48px 44px 68px 68px 52px 56px 56px 72px 120px'
+const COLS = '52px 96px 72px 68px 72px 58px 44px 44px 78px 78px 52px 68px 76px 120px'
 
 function HeaderRow() {
   const cols = [
@@ -234,16 +252,20 @@ function HeaderRow() {
     { label: 'Fund',     align: 'left'   },
     { label: 'Price',    align: 'right'  },
     { label: '30D',      align: 'right'  },
-    { label: 'vs QQQ',  align: 'right'  },
-    { label: 'DD %',     align: 'right'  },
+    { label: 'vs QQQ 30D', align: 'right', tip: '30D return vs QQQ (outperformance)' },
+    { label: 'ATH DD%',  align: 'right',  tip: 'Drawdown from all-time / 52-week high' },
     { label: 'Vol',      align: 'right'  },
     { label: 'Rank',     align: 'center' },
-    { label: 'T1',       align: 'center', tip: 'EMA(12) ≥ EMA(21) = Positive trend' },
-    { label: 'T2',       align: 'center', tip: 'Aroon(34) Up > Down = Positive momentum' },
-    { label: 'RSI',      align: 'center', tip: 'RSI(14) — >70 overbought, <30 oversold' },
-    { label: 'Sharpe',   align: 'center', tip: 'Annualised Sharpe ratio (30D risk-adj return)' },
-    { label: 'EMA dev',  align: 'center', tip: '% above/below 20D EMA' },
-    { label: 'Verdict',  align: 'center', tip: 'Ripping / Positive Trend / Neutral / Negative Trend / Cooked' },
+    { label: 'TPI 1',    align: 'center', tip: 'T1: EMA(12) ≥ EMA(21) → Positive. EMA(12) < EMA(21) → Negative.' },
+    { label: 'TPI 2',    align: 'center', tip: 'T2: Aroon(34). Up > Down → Positive momentum. Up < Down → Negative.' },
+    { label: 'RSI',      align: 'center', tip: 'Smoothed RSI: RSI(7) with EMA(14) applied. >70 overbought, <30 oversold.' },
+    { label: '30D Sharpe', align: 'center', tip: '30D annualised Sharpe ratio. >1.5 strong · >0.5 ok · <0 poor.' },
+    { label: 'EMA(20) dev', align: 'center', tip: '% above/below the 20-day exponential moving average. Positive = extended above, risk of mean reversion.' },
+    { label: 'Verdict',  align: 'center', tip: '🚀 Ripping: T1+T2 positive, RSI>55, EMA dev>0, DD>-5%
+↑ Positive Trend: T1+T2 both positive
+→ Neutral: mixed signals
+↓ Negative Trend: T1+T2 both negative
+💀 Cooked: T1+T2 negative, RSI<45, EMA dev<-5%, DD<-20%' },
   ]
   return (
     <div style={{ display: 'grid', gridTemplateColumns: COLS, padding: '0 16px 8px', gap: 6, borderBottom: '1px solid #e5e7eb' }}>
@@ -280,7 +302,7 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
     <div style={rowStyle}>
       <div style={{ fontSize: 14, fontWeight: 800, color: d.color }}>{symbol}</div>
       <div style={{ fontSize: 11, fontWeight: 500, color: '#6b7280', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.name}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>${d.price?.toFixed(2)}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>US${d.price?.toFixed(2)}</div>
       <div style={{ textAlign: 'right' }}><Pct v={d.change30d} /></div>
       <div style={{ textAlign: 'right' }}><Pct v={d.vsQQQ} /></div>
       <div style={{ textAlign: 'right' }}>
@@ -351,7 +373,7 @@ export default function AiHedgePortfolio() {
 
           // Quant metrics (use full 60-pt spark)
           m[sym] = {
-            rsi:    calcRSI(d.spark),
+            rsi:    calcRSISmoothed(d.spark),
             sharpe: calcSharpe(d.spark),
             emaDev: calcEMADev(d.spark),
           }
@@ -378,12 +400,6 @@ export default function AiHedgePortfolio() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <span style={{ ...LBL }}>
-          Rank · DD from 52W high · Vol vs 20D avg · T1: EMA(12/21) · T2: Aroon(34) · RSI(14) · 30D Sharpe · EMA(20) dev
-        </span>
-      </div>
-
       <HeaderRow />
 
       <div style={{ marginTop: 4 }}>
@@ -405,21 +421,7 @@ export default function AiHedgePortfolio() {
         )}
       </div>
 
-      {/* Legend */}
-      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f3f4f6', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-        {[
-          ['T1',      'EMA(12) ≥ EMA(21) = Positive trend signal'],
-          ['T2',      'Aroon(34) Up > Down = Positive momentum'],
-          ['RSI',     '>70 overbought · <30 oversold'],
-          ['Sharpe',  '>1.5 strong · >0.5 ok · <0 poor (30D annualised)'],
-          ['EMA dev', '% above/below 20D exponential moving average'],
-          ['Verdict', '🚀 Ripping · ↑ Positive Trend · → Neutral · ↓ Negative Trend · 💀 Cooked'],
-        ].map(([lbl, tip]) => (
-          <span key={lbl} style={{ fontSize: 11, color: '#9ca3af' }}>
-            <span style={{ fontWeight: 700, color: '#6b7280' }}>{lbl}:</span> {tip}
-          </span>
-        ))}
-      </div>
+
     </div>
   )
 }
