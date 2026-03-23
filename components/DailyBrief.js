@@ -41,7 +41,7 @@ function normaliseAsset(raw) {
   if (MAP[s]) return MAP[s]
   // Strip quote currency suffix from composite tickers (e.g. ETHUSD → ETH)
   const stripped = s.replace(/(USDT|USDC|USD|PERP)$/, '').trim()
-  return MAP[stripped] ?? stripped || null
+  return MAP[stripped] ?? (stripped || null)
 }
 
 function fmtS1(signal) {
