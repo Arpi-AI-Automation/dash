@@ -121,9 +121,9 @@ export default function ChecklistBacktest() {
   const [stats,   setStats]   = useState(null)
 
   useEffect(() => {
-    (async () => {
+    const load = async () => {
       try {
-        const signalsData = await fetch('/api/signals?history=true').then(r => r.json())
+        const signalsData = await fetch('/api/signals?history=true', { cache: 'no-store' }).then(r => r.json())
 
         // Stored daily scores — written by DecisionChecklist after each live computation
         const cdArray = Array.isArray(signalsData?.checklistDaily)
@@ -179,7 +179,11 @@ export default function ChecklistBacktest() {
         setError(null)
       } catch(e) { setError(e.message) }
       finally { setLoading(false) }
-    })()
+    }
+    load()
+    // Refetch every 90s so the backtest picks up new scores written by the checklist
+    const iv = setInterval(load, 90_000)
+    return () => clearInterval(iv)
   }, [])
 
   useEffect(() => {
