@@ -1,6 +1,11 @@
 // app/api/cron/daily-score/route.js
-// Runs at UTC 00:05 via Vercel cron — final safety net after s2-sync at 00:01–00:04.
-// Writes: btc:checklist-daily, vi:daily, vi2:daily, s2:daily (with equity + zero-guard)
+// Runs at UTC 00:05 via Vercel cron — final safety net.
+// Writes: btc:checklist-daily, vi:daily, vi2:daily, s2:daily (with equity)
+//
+// ZERO-GUARD LOGIC (fixed):
+// All-zero alloc is VALID when asset='USD' (cash signal from TradingView).
+// Only treat as corrupt if asset is null/empty AND alloc is all zeros
+// (that's the signature of a bad cron write, not a legitimate cash signal).
 
 export const revalidate = 0
 
@@ -72,10 +77,29 @@ async function getCoinGeckoPrices() {
   } catch { return null }
 }
 
+function isCashSignal(s2Signal) {
+  // USD/cash: asset is 'USD' or asset contains 'USD', regardless of alloc values
+  const asset = (s2Signal?.asset ?? '').toUpperCase()
+  return asset === 'USD' || asset === ''
+}
+
+function isCorruptSignal(s2Signal) {
+  // Corrupt = no asset AND all-zero alloc AND no updated_at
+  // This is what a bad cron write looks like vs a legitimate cash signal
+  const asset    = (s2Signal?.asset ?? '').toUpperCase()
+  const allocSum = Object.values(s2Signal?.alloc ?? {}).reduce((s, v) => s + v, 0)
+  const hasAsset = asset.length > 0 && asset !== 'NULL' && asset !== 'UNDEFINED'
+  // If it has a clear asset name, it's intentional (even if alloc is zero = cash)
+  if (hasAsset) return false
+  // No asset + no alloc = likely corrupt
+  return allocSum === 0
+}
+
 function computeEquity(alloc, prices, basePrices) {
   if (!alloc || !prices || !basePrices) return null
   const allocSum = Object.values(alloc).reduce((s, v) => s + v, 0)
-  if (allocSum === 0) return 1.0
+  // Cash position: equity is unchanged from entry point — caller handles this
+  if (allocSum === 0) return null
   const scl = allocSum > 1 ? 100 : 1
   let portfolioReturn = 0, totalWeight = 0
   for (const [asset, rawW] of Object.entries(alloc)) {
@@ -184,21 +208,23 @@ export async function GET(request) {
     const oiRising    = bybit.oiCurr !== null && bybit.oiPrev !== null ? bybit.oiCurr > bybit.oiPrev : null
     const hasDom      = dominance !== null && dominance?.trend !== null
 
-    const conditions = {
-      c1Long:  frPct <= 0.005,    c1Short: frPct > 0.05,
-      c2Long:  fearGreed !== null ? fearGreed < 30  : null,
-      c2Short: fearGreed !== null ? fearGreed > 70  : null,
-      c3Long:  tpiSignal === 'LONG',  c3Short: tpiSignal === 'SHORT',
-      c4Long:  oiRising !== null ? (oiRising && price24hPct > 0) : null,
-      c4Short: oiRising !== null ? (oiRising && price24hPct < 0) : null,
-      c5Long:  hasDom ? dominance.trend === 'rising'  : null,
-      c5Short: hasDom ? dominance.trend === 'falling' : null,
-      c6Long:  bybit.takerBuyRatio !== null ? bybit.takerBuyRatio > 52 : null,
-      c6Short: bybit.takerBuyRatio !== null ? bybit.takerBuyRatio < 48 : null,
-    }
+    const longScore  = [
+      frPct <= 0.005,
+      fearGreed !== null ? fearGreed < 30  : null,
+      tpiSignal === 'LONG',
+      oiRising !== null ? (oiRising && price24hPct > 0) : null,
+      hasDom ? dominance.trend === 'rising'  : null,
+      bybit.takerBuyRatio !== null ? bybit.takerBuyRatio > 52 : null,
+    ].filter(c => c === true).length
 
-    const longScore  = ['c1Long','c2Long','c3Long','c4Long','c5Long','c6Long'].filter(k => conditions[k] === true).length
-    const shortScore = ['c1Short','c2Short','c3Short','c4Short','c5Short','c6Short'].filter(k => conditions[k] === true).length
+    const shortScore = [
+      frPct > 0.05,
+      fearGreed !== null ? fearGreed > 70  : null,
+      tpiSignal === 'SHORT',
+      oiRising !== null ? (oiRising && price24hPct < 0) : null,
+      hasDom ? dominance.trend === 'falling' : null,
+      bybit.takerBuyRatio !== null ? bybit.takerBuyRatio < 48 : null,
+    ].filter(c => c === true).length
 
     const writes = []
 
@@ -222,65 +248,71 @@ export async function GET(request) {
       }))
     }
 
-    // ── S2 daily — with zero-alloc guard ─────────────────────────────────────
-    // GUARD: If signal:s2 has all-zero alloc (corrupted/stale state from a bad
-    // cron write), do NOT write it — find the last known good entry instead.
+    // ── S2 daily ─────────────────────────────────────────────────────────────
     let s2WriteResult = 'skipped'
 
     if (s2Signal) {
-      const allocSum = Object.values(s2Signal.alloc ?? {}).reduce((s, v) => s + v, 0)
-      const isZeroAlloc = allocSum === 0
+      const corrupt = isCorruptSignal(s2Signal)
+      const cash    = isCashSignal(s2Signal)
 
-      let effectiveAlloc  = s2Signal.alloc
-      let effectiveScores = s2Signal.scores
-      let effectiveAsset  = s2Signal.asset
+      let effectiveSignal = s2Signal
 
-      if (isZeroAlloc) {
-        // Find last good s2:daily entry (non-zero alloc)
+      if (corrupt) {
+        // Bad signal — find last known good entry and use that
         const lastGood = [...allS2Daily]
           .reverse()
-          .find(e => e.alloc && Object.values(e.alloc).reduce((s, v) => s + v, 0) > 0)
-
+          .find(e => {
+            const asset = (e.asset ?? '').toUpperCase()
+            // Good entry = has a real asset name
+            return asset.length > 0 && asset !== 'NULL' && asset !== 'UNDEFINED'
+          })
         if (lastGood) {
-          effectiveAlloc  = lastGood.alloc
-          effectiveScores = lastGood.scores ?? effectiveScores
-          effectiveAsset  = lastGood.asset  ?? effectiveAsset
-          s2WriteResult   = `carried-forward-from-${lastGood.date}`
-
-          // Also repair signal:s2 itself so future cron runs don't perpetuate zeros
-          writes.push(redisSet('signal:s2', {
+          effectiveSignal = {
             ...s2Signal,
-            alloc:        effectiveAlloc,
-            scores:       effectiveScores,
-            asset:        effectiveAsset,
-            cron_repaired_at: new Date().toISOString(),
-            cron_repaired_from: lastGood.date,
-          }))
+            asset:   lastGood.asset,
+            alloc:   lastGood.alloc,
+            scores:  lastGood.scores,
+          }
+          s2WriteResult = `repaired-from-${lastGood.date}`
+          // Repair signal:s2 itself
+          writes.push(redisSet('signal:s2', effectiveSignal))
         } else {
           s2WriteResult = 'no-good-entry-found'
         }
       } else {
-        s2WriteResult = 'fresh-signal'
+        s2WriteResult = cash ? 'cash-signal' : 'fresh-signal'
       }
 
-      if (effectiveAlloc && Object.values(effectiveAlloc).reduce((s, v) => s + v, 0) > 0) {
-        // Compute equity
-        const baseEntry  = allS2Daily.find(e => e.base_prices != null)
-        const basePrices = baseEntry?.base_prices ?? null
-        const equity     = computeEquity(effectiveAlloc, allPrices, basePrices)
+      // Compute equity for today
+      const baseEntry  = allS2Daily.find(e => e.base_prices != null)
+      const basePrices = baseEntry?.base_prices ?? null
 
-        writes.push(redisHSet('s2:daily', dateKey, {
-          date:       dateKey,
-          asset:      effectiveAsset,
-          alloc:      effectiveAlloc,
-          scores:     effectiveScores,
-          ts:         Date.now(),
-          updated_at: new Date().toISOString(),
-          equity,
-          source:     'daily-score-cron',
-          s2_status:  s2WriteResult,
-        }))
+      let equity
+      if (cash) {
+        // Cash = locked at last non-cash entry's equity value
+        const lastNonCash = [...allS2Daily]
+          .reverse()
+          .find(e => {
+            const a = (e.asset ?? '').toUpperCase()
+            return a !== 'USD' && a.length > 0 && e.equity != null
+          })
+        equity = lastNonCash?.equity ?? 1.0
+        s2WriteResult += '+equity-locked'
+      } else {
+        equity = computeEquity(effectiveSignal.alloc, allPrices, basePrices)
       }
+
+      writes.push(redisHSet('s2:daily', dateKey, {
+        date:       dateKey,
+        asset:      effectiveSignal.asset,
+        alloc:      effectiveSignal.alloc,
+        scores:     effectiveSignal.scores,
+        ts:         Date.now(),
+        updated_at: new Date().toISOString(),
+        equity,
+        source:     'daily-score-cron',
+        s2_status:  s2WriteResult,
+      }))
     }
 
     await Promise.all(writes)
