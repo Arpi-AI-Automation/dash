@@ -111,37 +111,102 @@ function calcEMADev(prices, period = 20) {
   return parseFloat(((prices[prices.length - 1] - ema) / ema * 100).toFixed(2))
 }
 
+// ── Days in current trend ────────────────────────────────────────────────────
+function calcDaysInTrend(spark, period1 = 12, period2 = 21) {
+  if (!spark || spark.length < period2 + 1) return null
+  const k1 = 2 / (period1 + 1), k2 = 2 / (period2 + 1)
+  let ema1 = spark.slice(0, period1).reduce((s, v) => s + v, 0) / period1
+  let ema2 = spark.slice(0, period2).reduce((s, v) => s + v, 0) / period2
+  for (let i = period1; i < period2; i++) ema1 = spark[i] * k1 + ema1 * (1 - k1)
+  const states = []
+  for (let i = period2; i < spark.length; i++) {
+    ema1 = spark[i] * k1 + ema1 * (1 - k1)
+    ema2 = spark[i] * k2 + ema2 * (1 - k2)
+    states.push(ema1 >= ema2 ? 'POSITIVE' : 'NEGATIVE')
+  }
+  if (!states.length) return null
+  const current = states[states.length - 1]
+  let count = 0
+  for (let i = states.length - 1; i >= 0; i--) {
+    if (states[i] === current) count++
+    else break
+  }
+  return count
+}
+
+function calcAroonDaysInTrend(sparkHigh, sparkLow, length = 34) {
+  if (!sparkHigh || !sparkLow || sparkHigh.length < length + 2) return null
+  const states = []
+  for (let end = length; end < sparkHigh.length; end++) {
+    const highs = sparkHigh.slice(end - length, end + 1)
+    const lows  = sparkLow.slice(end - length, end + 1)
+    let maxH = -Infinity, maxIdx = 0, minL = Infinity, minIdx = 0
+    for (let i = 0; i < highs.length; i++) {
+      if (highs[i] > maxH) { maxH = highs[i]; maxIdx = i }
+      if (lows[i]  < minL) { minL = lows[i];  minIdx = i }
+    }
+    const aroonUp   = 100 * maxIdx / length
+    const aroonDown = 100 * minIdx / length
+    states.push(aroonUp > aroonDown ? 'POSITIVE' : 'NEGATIVE')
+  }
+  if (!states.length) return null
+  const current = states[states.length - 1]
+  let count = 0
+  for (let i = states.length - 1; i >= 0; i--) {
+    if (states[i] === current) count++
+    else break
+  }
+  return count
+}
+
 // ── Per-row Verdict ───────────────────────────────────────────────────────────
 // Ripping:        T1+T2 both POSITIVE, RSI > 55, EMA dev > 0, DD > -5%
 // Positive Trend: T1+T2 both POSITIVE
 // Neutral:        T1/T2 mixed or insufficient data
 // Negative Trend: T1+T2 both NEGATIVE
 // Cooked:         T1+T2 both NEGATIVE, RSI < 45, EMA dev < -5, DD < -20%
-function calcVerdict(t1, t2signal, rsi, drawdown, emaDev) {
+function calcVerdict(t1, t2signal, rsi, drawdown, adx) {
   if (!t1 || !t2signal) return 'NEUTRAL'
 
   const bothPositive = t1 === 'POSITIVE' && t2signal === 'POSITIVE'
   const bothNegative = t1 === 'NEGATIVE' && t2signal === 'NEGATIVE'
 
   if (bothPositive) {
-    // Ripping: strong momentum on top of positive trend
-    const rsiStrong    = rsi != null   ? rsi    > 55  : true
-    const emaExtended  = emaDev != null ? emaDev > 0   : true
-    const notTooDeep   = drawdown != null ? drawdown > -5 : true
-    if (rsiStrong && emaExtended && notTooDeep) return 'RIPPING'
+    const trendStrong = adx      != null ? adx      > 25 : true
+    const rsiUptrend  = rsi      != null ? rsi      > 52 : true
+    const notTooDeep  = drawdown != null ? drawdown > -5 : true
+    if (trendStrong && rsiUptrend && notTooDeep) return 'RIPPING'
     return 'POSITIVE TREND'
   }
 
   if (bothNegative) {
-    // Cooked: deeply negative across all signals
-    const rsiWeak     = rsi != null    ? rsi    < 45   : false
-    const emaBelowAvg = emaDev != null ? emaDev < -5   : false
+    const trendStrong = adx      != null ? adx      > 25  : false
+    const rsiDowntrend= rsi      != null ? rsi      < 48  : false
     const deepDD      = drawdown != null ? drawdown < -20 : false
-    if (rsiWeak && emaBelowAvg && deepDD) return 'COOKED'
+    if (trendStrong && rsiDowntrend && deepDD) return 'COOKED'
     return 'NEGATIVE TREND'
   }
 
   return 'NEUTRAL'
+}
+
+// 30D Pearson correlation vs QQQ
+function calcCorrelation(etfSpark, qqqSpark) {
+  if (!etfSpark || !qqqSpark) return null
+  const len = Math.min(etfSpark.length, qqqSpark.length, 30)
+  if (len < 5) return null
+  const etf = etfSpark.slice(-len), qqq = qqqSpark.slice(-len)
+  const retE = [], retQ = []
+  for (let i = 1; i < len; i++) {
+    retE.push((etf[i] - etf[i-1]) / etf[i-1])
+    retQ.push((qqq[i] - qqq[i-1]) / qqq[i-1])
+  }
+  const n = retE.length
+  const meanE = retE.reduce((s,v) => s+v,0)/n, meanQ = retQ.reduce((s,v) => s+v,0)/n
+  let num=0, stdE=0, stdQ=0
+  for (let i=0;i<n;i++) { num+=(retE[i]-meanE)*(retQ[i]-meanQ); stdE+=(retE[i]-meanE)**2; stdQ+=(retQ[i]-meanQ)**2 }
+  const denom=Math.sqrt(stdE*stdQ)
+  return denom===0 ? null : parseFloat((num/denom).toFixed(2))
 }
 
 const VERDICT_META = {
@@ -194,11 +259,6 @@ function VerdictPill({ verdict }) {
   )
 }
 
-function RankBadge({ rank }) {
-  if (!rank) return <span style={{ color: '#9ca3af', fontSize: 13, fontWeight: 600 }}>—</span>
-  const colors = ['#f59e0b', '#94a3b8', '#b45309', '#6b7280', '#9ca3af']
-  return <span style={{ fontSize: 13, fontWeight: 800, color: colors[rank - 1] ?? '#9ca3af' }}>#{rank}</span>
-}
 
 function Sparkline({ data, color, width = 80, height = 30 }) {
   if (!data || data.length < 2) return <div style={{ width, height }} />
@@ -235,16 +295,22 @@ function RSIBar({ rsi }) {
   )
 }
 
-function SharpeDisplay({ v }) {
+function ADXDisplay({ v }) {
   if (v == null) return <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>
-  const color = v >= 1.5 ? '#059669' : v >= 0.5 ? '#f59e0b' : v < 0 ? '#dc2626' : '#6b7280'
-  return <span style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{v > 0 ? '+' : ''}{v}</span>
+  const color = v >= 40 ? '#059669' : v >= 25 ? '#f59e0b' : '#9ca3af'
+  const label = v >= 40 ? 'Strong' : v >= 25 ? 'Trend' : 'Weak'
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+      <span style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{v}</span>
+      <span style={{ fontSize: 9, fontWeight: 600, color }}>{label}</span>
+    </div>
+  )
 }
 
-function EMADevDisplay({ v }) {
+function PctFromHighDisplay({ v }) {
   if (v == null) return <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>
-  const color = v > 5 ? '#dc2626' : v > 0 ? '#059669' : v < -5 ? '#059669' : '#f59e0b'
-  return <span style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{v > 0 ? '+' : ''}{v}%</span>
+  const color = v >= -5 ? '#059669' : v >= -15 ? '#f59e0b' : '#dc2626'
+  return <span style={{ fontSize: 13, fontWeight: 700, color, fontVariantNumeric: 'tabular-nums' }}>{v.toFixed(1)}%</span>
 }
 
 // ── Column grid ───────────────────────────────────────────────────────────────
@@ -258,13 +324,13 @@ function HeaderRow() {
     { label: 'Price',    align: 'right'  },
     { label: '30D',      align: 'right'  },
     { label: 'vs QQQ 30D', align: 'right', tip: '30D return vs QQQ (outperformance)' },
-    { label: 'ATH DD%',  align: 'right',  tip: 'Drawdown from all-time / 52-week high' },
+    { label: '52W DD%',  align: 'right',  tip: '% below 52-week high (Yahoo 1-year high, not true ATH).' },
     { label: 'Vol',      align: 'right'  },
     { label: 'TPI 1',    align: 'center', tip: 'T1: EMA(12) ≥ EMA(21) → Positive. EMA(12) < EMA(21) → Negative.' },
     { label: 'TPI 2',    align: 'center', tip: 'T2: Aroon(34). Up > Down → Positive momentum. Up < Down → Negative.' },
     { label: 'RSI',      align: 'center', tip: 'Smoothed RSI: RSI(7) with EMA(14) applied. >50 = uptrend, <50 = downtrend. 50 is the key threshold.' },
-    { label: '30D Sharpe', align: 'center', tip: '30D annualised Sharpe ratio. >1.5 strong · >0.5 ok · <0 poor.' },
-    { label: 'EMA(20) dev', align: 'center', tip: '% above/below the 20-day exponential moving average. Positive = extended above, risk of mean reversion.' },
+    { label: 'ADX',       align: 'center', tip: 'ADX(14) — trend strength. >40 strong, 25-40 developing, <20 no trend. Direction from TPI 1/2.' },
+    { label: 'vs 52W Hi', align: 'center', tip: '% below 52-week high. 0% = at annual peak. Red = >15% below peak.' },
     { label: 'Verdict',  align: 'center', tip: '🚀 Ripping: T1+T2 positive, RSI>55, EMA dev>0, DD>-5% | Positive Trend: T1+T2 both positive | Neutral: mixed | Negative Trend: T1+T2 both negative | 💀 Cooked: T1+T2 negative, RSI<45, EMA dev<-5%, DD<-20%' },
     { label: '30D',      align: 'center', tip: '30-day price sparkline. Green = up, red = down.' },
   ]
@@ -281,7 +347,7 @@ function HeaderRow() {
 
 function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
   const meta = ETF_META[symbol]
-  const { rsi, sharpe, emaDev } = queuedMetrics ?? {}
+  const { rsi, adx, pctFromHigh, daysT1, daysT2 } = queuedMetrics ?? {}
 
   const rowStyle = {
     display: 'grid', gridTemplateColumns: COLS,
@@ -314,19 +380,19 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
       <div style={{ textAlign: 'right' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: volColor }}>{d.volRatio != null ? `${d.volRatio.toFixed(1)}x` : '—'}</span>
       </div>
-      {/* T1 — EMA 12/21 */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <SignalPill signal={t1} label="T1" />
+        {daysT1 != null && <span style={{ fontSize: 9, color: '#9ca3af' }}>{daysT1}d</span>}
       </div>
 
-      {/* T2 — Aroon(34) */}
-      <div style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
         <SignalPill signal={t2?.signal} label="T2" />
+        {daysT2 != null && <span style={{ fontSize: 9, color: '#9ca3af' }}>{daysT2}d</span>}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'center' }}><RSIBar rsi={rsi} /></div>
-      <div style={{ textAlign: 'center' }}><SharpeDisplay v={sharpe} /></div>
-      <div style={{ textAlign: 'center' }}><EMADevDisplay v={emaDev} /></div>
+      <div style={{ display: 'flex', justifyContent: 'center' }}><ADXDisplay v={adx} /></div>
+      <div style={{ textAlign: 'center' }}><PctFromHighDisplay v={pctFromHigh} /></div>
 
       {/* Verdict */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -374,20 +440,23 @@ export default function AiHedgePortfolio() {
           if (!d?.spark) return
 
           // Quant metrics (use full 60-pt spark)
+          const t1Val  = calcT1(d.spark)
+          const t2Val  = calcT2(d.sparkHigh, d.sparkLow, 34)
+          const rsiVal = calcRSISmoothed(d.spark)
+          const adxVal = calcADX(d.spark, d.sparkHigh, d.sparkLow, 14)
+          const pctFromHighVal = calcPctFromHigh(d.price, d.high52w)
+
           m[sym] = {
-            rsi:    calcRSISmoothed(d.spark),
-            sharpe: calcSharpe(d.spark),
-            emaDev: calcEMADev(d.spark),
+            rsi:         rsiVal,
+            adx:         adxVal,
+            pctFromHigh: pctFromHighVal,
+            daysT1:      calcDaysInTrend(d.spark),
+            daysT2:      calcAroonDaysInTrend(d.sparkHigh, d.sparkLow, 34),
           }
 
-          // T1: 12/21 EMA from closes
-          t1[sym] = calcT1(d.spark)
-
-          // T2: Aroon(34) from high/low arrays
-          t2[sym] = calcT2(d.sparkHigh, d.sparkLow, 34)
-
-          // Per-row verdict
-          v[sym] = calcVerdict(t1[sym], t2[sym]?.signal, m[sym].rsi, d.drawdown, m[sym].emaDev)
+          t1[sym] = t1Val
+          t2[sym] = t2Val
+          v[sym]  = calcVerdict(t1Val, t2Val?.signal, rsiVal, d.drawdown, adxVal)
         })
       }
 
@@ -423,7 +492,39 @@ export default function AiHedgePortfolio() {
         )}
       </div>
 
-
+      {/* ── Portfolio Regime ── */}
+      {!loading && mktData && (() => {
+        const posT1    = ETF_ORDER.filter(s => t1Map[s]  === 'POSITIVE').length
+        const posT2    = ETF_ORDER.filter(s => t2Map[s]?.signal === 'POSITIVE').length
+        const ripping  = ETF_ORDER.filter(s => verdicts[s] === 'RIPPING').length
+        const positive = ETF_ORDER.filter(s => verdicts[s] === 'POSITIVE TREND' || verdicts[s] === 'RIPPING').length
+        const negative = ETF_ORDER.filter(s => verdicts[s] === 'NEGATIVE TREND' || verdicts[s] === 'COOKED').length
+        const rc = positive > negative ? '#059669' : negative > positive ? '#dc2626' : '#f59e0b'
+        const rl = positive >= 4 ? 'Risk On' : negative >= 4 ? 'Risk Off' : positive > negative ? 'Leaning Positive' : negative > positive ? 'Leaning Negative' : 'Mixed'
+        return (
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '2px solid #f3f4f6', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontFamily: FONT, fontSize: 11, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Portfolio Regime</span>
+              <span style={{ fontFamily: FONT, fontSize: 12, fontWeight: 700, padding: '3px 12px', borderRadius: 20, background: rc + '18', color: rc, border: `1px solid ${rc}35` }}>{rl}</span>
+            </div>
+            {[
+              { label: 'TPI 1 Positive', val: `${posT1}/${ETF_ORDER.length}`, c: posT1 > ETF_ORDER.length/2 ? '#059669' : '#dc2626' },
+              { label: 'TPI 2 Positive', val: `${posT2}/${ETF_ORDER.length}`, c: posT2 > ETF_ORDER.length/2 ? '#059669' : '#dc2626' },
+              { label: 'Ripping',  val: ripping,  c: '#059669' },
+              { label: 'Positive', val: positive, c: '#10b981' },
+              { label: 'Negative', val: negative, c: '#dc2626' },
+            ].map(({ label, val, c }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontFamily: FONT, fontSize: 11, color: '#9ca3af' }}>{label}</span>
+                <span style={{ fontFamily: FONT, fontSize: 14, fontWeight: 800, color: c }}>{val}</span>
+              </div>
+            ))}
+            <span style={{ marginLeft: 'auto', fontFamily: FONT, fontSize: 10, color: '#d1d5db' }}>
+              ≥3/5 positive = regime change signal
+            </span>
+          </div>
+        )
+      })()}
     </div>
   )
 }
