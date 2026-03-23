@@ -73,7 +73,7 @@ export default function Home() {
         {/* ROW 4 — Valuation + Funding */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
           <div style={cardGreen}>
-            <span style={LABEL}>Valuation Index</span>
+            <span style={LABEL}>SDCA Valuations</span>
             <ValuationIndex />
           </div>
           <div style={cardOrange}>
