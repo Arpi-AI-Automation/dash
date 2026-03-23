@@ -249,7 +249,7 @@ function EMADevDisplay({ v }) {
 
 // ── Column grid ───────────────────────────────────────────────────────────────
 // Added Verdict column at the end; removed right-side T1VerdictPanel
-const COLS = '0.5fr 1.2fr 0.9fr 0.7fr 0.8fr 0.7fr 0.6fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr 0.85fr 1.4fr'
+const COLS = '0.5fr 1.2fr 0.9fr 0.7fr 0.8fr 0.7fr 0.6fr 0.9fr 0.9fr 0.6fr 0.8fr 0.85fr 1.5fr 0.8fr'
 
 function HeaderRow() {
   const cols = [
@@ -260,13 +260,13 @@ function HeaderRow() {
     { label: 'vs QQQ 30D', align: 'right', tip: '30D return vs QQQ (outperformance)' },
     { label: 'ATH DD%',  align: 'right',  tip: 'Drawdown from all-time / 52-week high' },
     { label: 'Vol',      align: 'right'  },
-    { label: 'Rank',     align: 'center' },
     { label: 'TPI 1',    align: 'center', tip: 'T1: EMA(12) ≥ EMA(21) → Positive. EMA(12) < EMA(21) → Negative.' },
     { label: 'TPI 2',    align: 'center', tip: 'T2: Aroon(34). Up > Down → Positive momentum. Up < Down → Negative.' },
     { label: 'RSI',      align: 'center', tip: 'Smoothed RSI: RSI(7) with EMA(14) applied. >50 = uptrend, <50 = downtrend. 50 is the key threshold.' },
     { label: '30D Sharpe', align: 'center', tip: '30D annualised Sharpe ratio. >1.5 strong · >0.5 ok · <0 poor.' },
     { label: 'EMA(20) dev', align: 'center', tip: '% above/below the 20-day exponential moving average. Positive = extended above, risk of mean reversion.' },
     { label: 'Verdict',  align: 'center', tip: '🚀 Ripping: T1+T2 positive, RSI>55, EMA dev>0, DD>-5% | Positive Trend: T1+T2 both positive | Neutral: mixed | Negative Trend: T1+T2 both negative | 💀 Cooked: T1+T2 negative, RSI<45, EMA dev<-5%, DD<-20%' },
+    { label: '30D',      align: 'center', tip: '30-day price sparkline. Green = up, red = down.' },
   ]
   return (
     <div style={{ display: 'grid', gridTemplateColumns: COLS, padding: '0 16px 8px', gap: 6, borderBottom: '1px solid #e5e7eb' }}>
@@ -314,8 +314,6 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
       <div style={{ textAlign: 'right' }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: volColor }}>{d.volRatio != null ? `${d.volRatio.toFixed(1)}x` : '—'}</span>
       </div>
-      <div style={{ textAlign: 'center' }}><RankBadge rank={d.rank} /></div>
-
       {/* T1 — EMA 12/21 */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <SignalPill signal={t1} label="T1" />
@@ -338,6 +336,14 @@ function ETFRow({ symbol, d, t1, t2, verdict, isLast, queuedMetrics }) {
       {/* Verdict */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <VerdictPill verdict={verdict} />
+      </div>
+
+      {/* Sparkline — green if 30D up, red if down */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <Sparkline
+          data={d.spark}
+          color={d.change30d == null ? '#9ca3af' : d.change30d > 0 ? '#10b981' : '#ef4444'}
+        />
       </div>
     </div>
   )
