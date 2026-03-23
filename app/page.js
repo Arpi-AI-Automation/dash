@@ -13,10 +13,6 @@ const TvSignalChart = dynamic(
   () => import('../components/TvSignals').then(m => ({ default: m.TvSignalChart })),
   { ssr: false }
 )
-const TvSignalGauge = dynamic(
-  () => import('../components/TvSignals').then(m => ({ default: m.TvSignalGauge })),
-  { ssr: false }
-)
 const RotationChart  = dynamic(() => import('../components/RotationChart'),  { ssr: false })
 const RotationChart2 = dynamic(() => import('../components/RotationChart2'), { ssr: false })
 
@@ -68,11 +64,9 @@ export default function Home() {
           <RotationChart2 />
         </div>
 
-        {/* ROW 3 — AI Hedge Portfolio — NO extra label, component owns its header */}
+        {/* ROW 3 — AI Hedge Portfolio */}
         <div style={{ ...cardYellow, marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: '1rem' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>AI Hedge Portfolio</span>
-          </div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>AI Hedge Portfolio</div>
           <AiHedgePortfolio />
         </div>
 
@@ -88,13 +82,10 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ROW 5 — Fear & Greed + TPI Gauge */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
-          <div style={cardPad}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Fear & Greed</div>
-            <FearGreed />
-          </div>
-          <TvSignalGauge />
+        {/* ROW 5 — Fear & Greed (full width) */}
+        <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1.25rem' }}>Fear & Greed</div>
+          <FearGreed />
         </div>
 
         {/* ROW 6 — OI Scatter */}
