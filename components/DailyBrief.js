@@ -233,14 +233,8 @@ export default function DailyBrief() {
 
         const takerBuyRatio = taker.result?.list?.[0] ? parseFloat(taker.result.list[0].buyRatio) * 100 : null
 
-        const params = new URLSearchParams()
-        if (fr   !== null) params.set('fundingRate',   fr.toFixed(8))
-        if (p24h !== null) params.set('price24hPcnt',  p24h.toFixed(6))
-        if (oiCurr !== null) params.set('oiCurr',      oiCurr.toFixed(2))
-        if (oiPrev !== null) params.set('oiPrev',       oiPrev.toFixed(2))
-        if (takerBuyRatio !== null) params.set('takerBuyRatio', takerBuyRatio.toFixed(4))
-
-        const cl = await fetch(`/api/checklist?${params}`, { cache: 'no-store' }).then(r => r.json())
+        // Use stored daily-close checklist (same source as DecisionChecklist component)
+        const cl = await fetch('/api/checklist?stored=true', { cache: 'no-store' }).then(r => r.json())
         if (cl.ok) setChecklist(cl)
       } catch (_) {}
     })()
@@ -265,10 +259,11 @@ export default function DailyBrief() {
   const fgM  = fgMeta(fgToday)
   const fgDelta = fgToday !== null && fg7d !== null ? fgToday - fg7d : null
 
-  const clBias  = checklist?.bias  ?? null
-  const clScore = checklist ? Math.max(checklist.longScore ?? 0, checklist.shortScore ?? 0) : null
-  const clTotal = checklist?.total ?? 6
-  const clCol   = biasColor(clBias)
+  const clLong  = checklist?.longScore  ?? null
+  const clShort = checklist?.shortScore ?? null
+  const clCol   = clLong != null && clShort != null
+    ? (clLong > clShort ? '#059669' : clShort > clLong ? '#dc2626' : '#f59e0b')
+    : '#f59e0b'
 
   return (
     <div style={{ fontFamily: FONT }}>
@@ -361,8 +356,10 @@ export default function DailyBrief() {
       <Row label="L/S Confluence" last>
         {checklist ? (
           <>
-            <Val color={clCol}>{clBias === 'LONG' ? 'Risk On' : clBias === 'SHORT' ? 'Risk Off' : 'NEUTRAL'}</Val>
-            <Pill color={clCol}>{clScore}/{clTotal}</Pill>
+            <Val color={clCol}>{clLong}L · {clShort}S</Val>
+            <Pill color={clCol}>
+              {clLong > clShort ? 'Long' : clShort > clLong ? 'Short' : 'Neutral'}
+            </Pill>
           </>
         ) : <Sub>Loading…</Sub>}
       </Row>
