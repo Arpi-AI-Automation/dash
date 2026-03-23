@@ -11,57 +11,83 @@ function tpiMeta(signal) {
   const s = signal.state
   if (s.includes('MAX LONG'))  return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.2)' }
   if (s.includes('LONG'))      return { label: s, color: '#059669', bg: 'rgba(16,185,129,.1)', border: 'rgba(16,185,129,.2)' }
-  if (s.includes('MAX SHORT')) return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)' }
-  if (s.includes('SHORT'))     return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)' }
+  if (s.includes('MAX SHORT')) return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)'  }
+  if (s.includes('SHORT'))     return { label: s, color: '#dc2626', bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.2)'  }
   return { label: s, color: '#6b7280', bg: 'rgba(107,114,128,.1)', border: 'rgba(107,114,128,.2)' }
 }
 
 function fmtTpiDetail(signal) {
   if (!signal) return '—'
-  const tpi = signal.tpi ?? null
-  const roc = signal.roc ?? null
+  const tpi   = signal.tpi ?? null
+  const roc   = signal.roc ?? null
   const state = tpiMeta(signal).label
   const tpiStr = tpi !== null ? ` (${tpi >= 0 ? '+' : ''}${Number(tpi).toFixed(2)})` : ''
-  const rocStr = roc !== null ? ` / ${Math.abs(roc) < 0.05 ? 'steady' : roc > 0 ? `rising RoC +${Number(roc).toFixed(2)}` : `falling RoC ${Number(roc).toFixed(2)}`}` : ''
+  const rocStr = roc !== null
+    ? ` / ${Math.abs(roc) < 0.05 ? 'steady' : roc > 0 ? `rising RoC +${Number(roc).toFixed(2)}` : `falling RoC ${Number(roc).toFixed(2)}`}`
+    : ''
   return `${state.toLowerCase()}${tpiStr}${rocStr}`
 }
 
+// Normalise a TV asset ticker to a clean display label
+// Handles: ETHUSD → ETH, BTCUSDT → BTC, PAXG → GOLD, USD → USD (not stripped)
 function normaliseAsset(raw) {
   if (!raw) return null
-  const s = raw.toUpperCase().replace(/(USD[T]?|USDT|PERP)$/, '').trim()
-  const MAP = { BTC:'BTC', ETH:'ETH', SOL:'SOL', SUI:'SUI', XRP:'XRP', BNB:'BNB', PAXG:'GOLD', USD:'USD' }
-  return MAP[s] ?? s
+  const s = raw.toUpperCase().trim()
+  // Explicit map first — catches plain 'USD' before the regex strips it
+  const MAP = {
+    BTC: 'BTC', ETH: 'ETH', SOL: 'SOL', SUI: 'SUI',
+    XRP: 'XRP', BNB: 'BNB', PAXG: 'GOLD', USD: 'USD',
+  }
+  if (MAP[s]) return MAP[s]
+  // Strip quote currency suffix from composite tickers (e.g. ETHUSD → ETH)
+  const stripped = s.replace(/(USDT|USDC|USD|PERP)$/, '').trim()
+  return MAP[stripped] ?? stripped || null
 }
 
 function fmtS1(signal) {
   if (!signal?.asset) return 'USD'
   const s = signal.asset.toLowerCase()
-  if (s.includes('bnb')) return 'BNB'
-  if (s.includes('eth')) return 'ETH'
-  if (s.includes('sol')) return 'SOL'
-  if (s.includes('xrp')) return 'XRP'
+  if (s.includes('bnb'))  return 'BNB'
+  if (s.includes('eth'))  return 'ETH'
+  if (s.includes('sol'))  return 'SOL'
+  if (s.includes('xrp'))  return 'XRP'
   if (s.includes('paxg')) return 'GOLD'
-  if (s.includes('sui')) return 'SUI'
+  if (s.includes('sui'))  return 'SUI'
   return 'USD'
 }
 
+// Format S2 signal — handles cash (all-zero alloc), active alloc, and plain asset
 function fmtS2(signal) {
   if (!signal) return '—'
-  if (signal.alloc) {
-    const entries = Object.entries(signal.alloc).filter(([, v]) => v > 0).sort(([, a], [, b]) => b - a)
-    if (entries.length) return entries.map(([k, v]) => `${v}% ${normaliseAsset(k)}`).join(' + ')
+
+  // Cash / USD: asset is USD regardless of alloc values
+  const assetUpper = (signal.asset ?? '').toUpperCase()
+  if (assetUpper === 'USD' || assetUpper === '') {
+    return 'USD 100%'
   }
+
+  // Active allocation: show percentages
+  if (signal.alloc) {
+    const entries = Object.entries(signal.alloc)
+      .filter(([, v]) => v > 0)
+      .sort(([, a], [, b]) => b - a)
+    if (entries.length) {
+      return entries.map(([k, v]) => `${v}% ${normaliseAsset(k)}`).join(' + ')
+    }
+  }
+
+  // Fallback: just show the normalised asset name
   return normaliseAsset(signal.asset) ?? '—'
 }
 
 function viMeta(v) {
-  if (v == null) return { color: '#6b7280', zone: '—', bg: 'rgba(107,114,128,.08)', border: 'rgba(107,114,128,.2)', pill: 'N/A' }
+  if (v == null) return { color: '#6b7280', bg: 'rgba(107,114,128,.08)', border: 'rgba(107,114,128,.2)', pill: 'N/A' }
   const n = parseFloat(v)
-  if (n >= 2)  return { color: '#dc2626', zone: 'overbought', bg: 'rgba(239,68,68,.08)',   border: 'rgba(239,68,68,.2)',   pill: 'OVERBOUGHT' }
-  if (n >= 1)  return { color: '#f97316', zone: 'elevated',   bg: 'rgba(249,115,22,.08)',  border: 'rgba(249,115,22,.2)',  pill: 'ELEVATED' }
-  if (n > -1)  return { color: '#f59e0b', zone: 'neutral',    bg: 'rgba(245,158,11,.08)',  border: 'rgba(245,158,11,.2)',  pill: 'NEUTRAL' }
-  if (n > -2)  return { color: '#10b981', zone: 'good value', bg: 'rgba(16,185,129,.08)',  border: 'rgba(16,185,129,.2)',  pill: 'GOOD VALUE' }
-  return              { color: '#059669', zone: 'deep value', bg: 'rgba(16,185,129,.1)',   border: 'rgba(16,185,129,.3)',  pill: 'DEEP VALUE' }
+  if (n >= 2)  return { color: '#dc2626', bg: 'rgba(239,68,68,.08)',   border: 'rgba(239,68,68,.2)',   pill: 'OVERBOUGHT' }
+  if (n >= 1)  return { color: '#f97316', bg: 'rgba(249,115,22,.08)',  border: 'rgba(249,115,22,.2)',  pill: 'ELEVATED'   }
+  if (n > -1)  return { color: '#f59e0b', bg: 'rgba(245,158,11,.08)',  border: 'rgba(245,158,11,.2)',  pill: 'NEUTRAL'    }
+  if (n > -2)  return { color: '#10b981', bg: 'rgba(16,185,129,.08)',  border: 'rgba(16,185,129,.2)',  pill: 'GOOD VALUE' }
+  return             { color: '#059669', bg: 'rgba(16,185,129,.1)',   border: 'rgba(16,185,129,.3)',  pill: 'DEEP VALUE' }
 }
 
 const PILL = {
@@ -79,7 +105,7 @@ const ROW = {
 }
 
 export default function DailyBrief() {
-  const [data, setData] = useState(null)
+  const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -96,14 +122,14 @@ export default function DailyBrief() {
     </div>
   )
 
-  const btc    = data?.btc
-  const rot    = data?.rotation
-  const s2     = data?.s2
-  const vi     = data?.vi
-  const vi2    = data?.vi2
-  const tpi    = tpiMeta(btc)
-  const viM    = viMeta(vi?.value)
-  const vi2M   = viMeta(vi2?.value)
+  const btc  = data?.btc
+  const rot  = data?.rotation
+  const s2   = data?.s2
+  const vi   = data?.vi
+  const vi2  = data?.vi2
+  const tpi  = tpiMeta(btc)
+  const viM  = viMeta(vi?.value)
+  const vi2M = viMeta(vi2?.value)
 
   return (
     <div>
@@ -138,10 +164,12 @@ export default function DailyBrief() {
           <span style={{ fontSize: 14, fontWeight: 800, color: '#111827' }}>{fmtS1(rot)}</span>
         </div>
 
-        {/* System 2 */}
+        {/* System 2 — now correctly shows USD 100% for cash signal */}
         <div style={ROW}>
           <span style={LABEL}>ROTATOOOR System 2</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', maxWidth: '55%' }}>{fmtS2(s2)}</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#111827', textAlign: 'right', maxWidth: '55%' }}>
+            {fmtS2(s2)}
+          </span>
         </div>
 
         {/* Market Cycle header */}
