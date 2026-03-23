@@ -1,6 +1,6 @@
 import dynamic from 'next/dynamic'
 import DailyBrief from '../components/DailyBrief'
-import DecisionChecklist, { LeverageVerdictCard } from '../components/DecisionChecklist'
+import DecisionChecklist from '../components/DecisionChecklist'
 import ChecklistBacktest from '../components/ChecklistBacktest'
 import FundingRate from '../components/FundingRate'
 import BtcComparison from '../components/BtcComparison'
@@ -100,16 +100,10 @@ export default function Home() {
           <BtcComparison />
         </div>
 
-        {/* ROW 8 — Checklist + Verdict */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '1.25rem', alignItems: 'start' }}>
-          <div style={cardBlue}>
-            <span style={LABEL}>Decision Checklist</span>
-            <DecisionChecklist />
-          </div>
-          <div style={cardRed}>
-            <span style={LABEL}>Leverage Verdict</span>
-            <LeverageVerdictCard />
-          </div>
+        {/* ROW 8 — Decision Checklist (full width, verdict included) */}
+        <div style={{ ...cardPad, marginBottom: '1.25rem' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', marginBottom: '1rem' }}>Decision Checklist — Long vs Short</div>
+          <DecisionChecklist />
         </div>
 
         {/* ROW 9 — Backtest */}
